@@ -52,96 +52,49 @@ typedef uint64_t ULONGLONG;
 #define DEFINE_GUID(...)   /* do nothing */
 #include "CatapultShellInterface.h"
 
-#define RAM_SIZE (64 * 1024 * 1024)
+#define CATAPULT_MMIO_MAX (16 * 1024 * 1024)
 
-#define NR_MASTERS	3
-#define NR_DEVICES	7
+#define NR_MASTERS	1
+#define NR_DEVICES	2
 
-class CounterDev : public sc_core::sc_module
+class AddressDev : public sc_core::sc_module
 {
 public:
-	enum {
-		R_COUNTER = 0,
-	};
 
-	tlm_utils::simple_target_socket<CounterDev> tgt_socket;
+	tlm_utils::simple_target_socket<AddressDev> tgt_socket;
 
-	CounterDev(sc_core::sc_module_name name) :
+	AddressDev(sc_core::sc_module_name name) :
 		sc_module(name),
-		tgt_socket("tgt-socket"),
-		r_counter(0)
+		tgt_socket("tgt-socket")
 	{
-		tgt_socket.register_b_transport(this, &CounterDev::b_transport);
+		tgt_socket.register_b_transport(this, &AddressDev::b_transport);
 	}
 
 private:
 	virtual void b_transport(tlm::tlm_generic_payload& trans,
 			sc_time& delay)
 	{
-		tlm::tlm_command cmd = trans.get_command();
+		// tlm::tlm_command cmd = trans.get_command();
 		unsigned char *data = trans.get_data_ptr();
-		unsigned int len = trans.get_data_length();
+		size_t len = trans.get_data_length();
 		uint64_t addr = trans.get_address();
 
-		if (len != 4 || trans.get_byte_enable_ptr() ||
-			addr != R_COUNTER) {
+        uint64_t value = addr;
+
+		if (len != 4 || trans.get_byte_enable_ptr())
+        {
 			trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
 			return;
 		}
 
 		if (trans.get_command() == tlm::TLM_READ_COMMAND) {
+            cout << "AddressRepeater: read @ 0x" << std::hex << addr << " for 0x" << len << " bytes" << endl;
 			memcpy(reinterpret_cast<void*>(data),
-				reinterpret_cast<const void *>(&r_counter),
-				len);
+				   reinterpret_cast<const void *>(&value),
+				   max(len, sizeof(value)));
 
-			r_counter++;
-
-		} else if (cmd == tlm::TLM_WRITE_COMMAND) {
-			memcpy(reinterpret_cast<void*>(&r_counter),
-				reinterpret_cast<const void *>(data),
-				len);
 		}
 	}
-
-	uint32_t r_counter;
-};
-
-class SMIDdev : public sc_core::sc_module
-{
-public:
-	tlm_utils::simple_target_socket<SMIDdev> tgt_socket;
-	tlm_utils::simple_initiator_socket<SMIDdev> init_socket;
-
-	SMIDdev(sc_core::sc_module_name name, uint32_t smid) :
-		sc_module(name),
-		tgt_socket("tgt-socket"),
-		init_socket("init-socket"),
-		m_smid(smid)
-	{
-		tgt_socket.register_b_transport(this, &SMIDdev::b_transport);
-	}
-
-private:
-	virtual void b_transport(tlm::tlm_generic_payload& trans,
-			sc_time& delay)
-	{
-		genattr_extension *genattr;
-
-		trans.get_extension(genattr);
-		if (!genattr) {
-			genattr = new genattr_extension();
-			trans.set_extension(genattr);
-		}
-
-		//
-		// Setup the SMID (master_id)
-		//
-		genattr->set_master_id(m_smid);
-
-		init_socket->b_transport(trans, delay);
-	}
-
-	uint32_t m_smid;
 };
 
 SC_MODULE(Top)
@@ -150,16 +103,7 @@ SC_MODULE(Top)
 	xilinx_versal_net versal_net;
 	debugdev debugdev_cpm;
 
-	memory mem0;
-	memory mem1;
-
-	xilinx_cdma cdma0;
-	SMIDdev smid_cdma0;
-
-	xilinx_cdma cdma1;
-	SMIDdev smid_cdma1;
-
-	CounterDev counter;
+	AddressDev address_repeater;
 	sc_signal<bool> rst;
 
 	SC_HAS_PROCESS(Top);
@@ -177,16 +121,7 @@ SC_MODULE(Top)
 		versal_net("versal-net", sk_descr),
 		debugdev_cpm("debugdev-cpm"),
 
-		mem0("mem0", sc_time(1, SC_NS), RAM_SIZE),
-		mem1("mem1", sc_time(1, SC_NS), RAM_SIZE),
-
-		cdma0("cdma0"),
-		smid_cdma0("smid-cdma0", 0x250),
-
-		cdma1("cdma1"),
-		smid_cdma1("smid-cdma1", 0x251),
-
-		counter("counter"),
+		address_repeater("address-repeater"),
 		rst("rst")
 	{
 		m_qk.set_global_quantum(quantum);
@@ -200,41 +135,23 @@ SC_MODULE(Top)
 		// [0xe4000000] : debugdev
 		// [0xe4020000] : CDMA 0 (SMID 0x250)
 		// [0xe4030000] : CDMA 1 (SMID 0x251)
-		// [0xe4040000] : counter
+		// [0xe4040000] : address_repeater
 		// [0xe4100000] : Memory 2 MB
 		// [0xe4300000] : Memory 2 MB
 		//
 		bus.memmap(0xe4000000ULL, 0x100 - 1,
 				ADDRMODE_RELATIVE, -1, debugdev_cpm.socket);
-		bus.memmap(0xe4020000ULL, 0x100 - 1,
-				ADDRMODE_RELATIVE, -1, cdma0.target_socket);
-		bus.memmap(0xe4030000ULL, 0x100 - 1,
-				ADDRMODE_RELATIVE, -1, cdma1.target_socket);
-		bus.memmap(0xe4040000ULL, 0x100 - 1,
-				ADDRMODE_RELATIVE, -1, counter.tgt_socket);
-		bus.memmap(0xe4100000ULL, RAM_SIZE - 1,
-				ADDRMODE_RELATIVE, -1, mem0.socket);
-   		bus.memmap(0xe4100000ULL + RAM_SIZE, RAM_SIZE - 1,
-   				ADDRMODE_RELATIVE, -1, mem1.socket);
-		bus.memmap(0x0LL, UINT64_MAX,
-				ADDRMODE_RELATIVE, -1, *(versal_net.s_cpm));
+	    bus.memmap(0xe4000000ULL + 0x100, UINT64_MAX,
+			    ADDRMODE_RELATIVE, -1, address_repeater.tgt_socket);
+//		bus.memmap(0xe4040000ULL, 0x100 - 1,
+//				ADDRMODE_RELATIVE, -1, address_repeater.tgt_socket);
+//		bus.memmap(0x0LL, UINT64_MAX,
+//				ADDRMODE_RELATIVE, -1, *(versal_net.s_cpm));
 
 		//
 		// Bus masters
 		//
 		versal_net.m_cpm->bind(*(bus.t_sk[0]));
-		smid_cdma0.init_socket(*(bus.t_sk[1]));
-		smid_cdma1.init_socket(*(bus.t_sk[2]));
-
-		//
-		// CDMA0 SMID setup
-		//
-		cdma0.init_socket(smid_cdma0.tgt_socket);
-
-		//
-		// CDMA1 SMID setup
-		//
-		cdma1.init_socket(smid_cdma1.tgt_socket);
 
 		/* Connect the PL irqs to the irq_pl_to_ps wires.  */
 		debugdev_cpm.irq(versal_net.pl2ps_irq[0]);
