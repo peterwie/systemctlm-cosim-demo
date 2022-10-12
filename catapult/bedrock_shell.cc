@@ -95,13 +95,29 @@ size_t BedrockShell::read_register(uint64_t address, size_t length, uint64_t& va
 {
     // Check range.
 
-    if ((address & 0xffffffffff000000) != 0)
+    uint64_t mask = 0xffffffff'ff000000;
+    uint64_t test = address & mask;
+    uint64_t expected = 0;
+
+    auto lfn = [](uint64_t address, uint64_t mask, uint64_t value, uint64_t ) { cout << "BedrockShell: address test [ "
+                                 << hex << address
+                                 << " & "
+                                 << hex << mask
+                                 << " = "
+                                 << hex << (address & mask)
+                                 << " ] (expected "
+                                 << hex << expected
+                                 << ")"
+                                 << endl; };
+
+    if (test != expected)
     {
-        cout << "BedrockShell: read 0x" << std::hex << address << " past end of BAR" << endl;
+        cout << "BedrockShell: read 0x" << std::hex << address << " past end of BAR (addr & " << hex << mask << " = " << hex << test << ")" << endl;
         return 0;
     }
 
     // Check for soft registers first (bits [23:21] == 0b100 and bit 20 == 0)
+    mask = 0x00000000'00f00000
     if (address & 0x00f00000) == 0x00800000)
     {
         auto softreg = ((address & 0x1FFFF8)  >> 3);
@@ -118,7 +134,7 @@ size_t BedrockShell::read_register(uint64_t address, size_t length, uint64_t& va
     }
 
 
-    for (const auto& fn = _simple_regs.find(address); 
+    for (const auto& fn = _simple_regs.find(address);
          fn != _simple_regs.end();)
     {
         cout << "BedrockShell: matched 0x" << hex << address << " to sreg " << fn->second.first << endl;
@@ -126,7 +142,7 @@ size_t BedrockShell::read_register(uint64_t address, size_t length, uint64_t& va
         return sizeof(uint32_t);
     }
 
-    for (const auto& fn = _dynamic_regs.find(address); 
+    for (const auto& fn = _dynamic_regs.find(address);
          fn != _dynamic_regs.end();)
     {
         cout << "BedrockShell: matched 0x" << hex << address << " to dreg " << fn->second.first << endl;
@@ -171,7 +187,7 @@ void BedrockShell::init_registers()
     _simple_regs[0x1D34] = make_pair("shell.029.nic_tor_debug2",    0x00e01400 );
     _simple_regs[0x1E34] = make_pair("shell.030.tor_tx_psop_ctr",   0x00000000 );
     _simple_regs[0x1F34] = make_pair("shell.031.tor_rx_psop_ctr",   0x00000000 );
-    
+
     _simple_regs[0x2034] = make_pair("shell.032.nic_tx_psop_ctr",   0x00000000 );
     _simple_regs[0x2134] = make_pair("shell.033.nic_rx_psop_ctr",   0x00000000 );
     _simple_regs[0x2234] = make_pair("shell.034.pcie_dma_health",   0x00000000 );
@@ -219,15 +235,15 @@ void BedrockShell::init_registers()
 
     _simple_regs[0x4034] = make_pair("shell.064.shell_id",          0x00bed70c ); // 0x00de17a0 );
     _simple_regs[0x4134] = make_pair("shell.065.role_version",      0xfacecafe );
-    _dynamic_regs[0x4234]= make_pair("shell.066.cycle_counter0",   
-                                     [this](uint64_t, size_t, uint64_t& v) { 
-                                        v = this->get_cycle_counter(true); 
-                                        return sizeof(uint32_t); 
+    _dynamic_regs[0x4234]= make_pair("shell.066.cycle_counter0",
+                                     [this](uint64_t, size_t, uint64_t& v) {
+                                        v = this->get_cycle_counter(true);
+                                        return sizeof(uint32_t);
                                      });
-    _dynamic_regs[0x4334]= make_pair("shell.067.cycle_counter1",   
-                                     [this](uint64_t, size_t, uint64_t& v) { 
-                                         v = this->get_cycle_counter(false); 
-                                         return sizeof(uint32_t); 
+    _dynamic_regs[0x4334]= make_pair("shell.067.cycle_counter1",
+                                     [this](uint64_t, size_t, uint64_t& v) {
+                                         v = this->get_cycle_counter(false);
+                                         return sizeof(uint32_t);
                                      });
 
     _simple_regs[0x4434] = make_pair("shell.068.shell_status",      []() {
