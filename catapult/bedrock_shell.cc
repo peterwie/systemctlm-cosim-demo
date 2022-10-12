@@ -203,12 +203,12 @@ void BedrockShell::init_registers()
 
     _dynamic_regs[0x4234]= make_pair("shell.066.cycle_counter0",   
                                      [this](uint64_t, size_t, uint64_t& v) { 
-                                        v = this->get_cycle_counter(0); 
+                                        v = this->get_cycle_counter(true); 
                                         return sizeof(uint32_t); 
                                      });
     _dynamic_regs[0x4334]= make_pair("shell.067.cycle_counter1",   
                                      [this](uint64_t, size_t, uint64_t& v) { 
-                                         v = this->get_cycle_counter(1); 
+                                         v = this->get_cycle_counter(false); 
                                          return sizeof(uint32_t); 
                                      });
 
