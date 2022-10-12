@@ -53,8 +53,8 @@ HAVE_VERILOG?=n
 HAVE_VERILOG_VERILATOR?=n
 HAVE_VERILOG_VCS?=n
 
-CFLAGS += -Wall -O2 -g
-CXXFLAGS += -Wall -O2 -g
+CFLAGS += -Wall -O0 -g
+CXXFLAGS += -Wall -O0 -g
 
 ifneq "$(SYSTEMC_INCLUDE)" ""
 CPPFLAGS += -I $(SYSTEMC_INCLUDE)
@@ -99,7 +99,7 @@ VERSAL_CPM_QDMA_DEMO_C = pcie/versal/cpm-qdma-demo.cc
 VERSAL_CPM4_QDMA_DEMO_O = pcie/versal/cpm4-qdma-demo.o
 VERSAL_CPM5_QDMA_DEMO_O = pcie/versal/cpm5-qdma-demo.o
 
-BEDROCK_CDX_C = bedrock_cdx.cc
+BEDROCK_CDX_C = bedrock_cdx.cc catapult/bedrock_shell.cc
 BEDROCK_CDX_O = $(BEDROCK_CDX_C:.cc=.o)
 
 ZYNQ_OBJS += $(ZYNQ_TOP_O)
@@ -311,6 +311,9 @@ TARGETS += $(TARGET_VERSAL_CPM4_QDMA_DEMO)
 TARGETS += $(TARGET_VERSAL_CPM5_QDMA_DEMO)
 endif
 
+# everything: $(TARGETS)
+
+# all: $(TARGET_BEDROCK_CDX)
 all: $(TARGETS)
 
 -include $(ZYNQ_OBJS:.o=.d)

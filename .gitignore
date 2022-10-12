@@ -1,5 +1,8 @@
 *.o
 *.d
+*.a
 *_demo
 .config.mk
 trace.vcd
+
+/bedrock_cdx

@@ -46,13 +46,7 @@ using namespace std;
 #include "tlm-extensions/genattr.h"
 #include "memory.h"
 
-// Catapult bedrock specific types and definitions
-typedef uint32_t ULONG;
-typedef uint64_t ULONGLONG;
-#define DEFINE_GUID(...)   /* do nothing */
-#include "CatapultShellInterface.h"
-
-#define CATAPULT_MMIO_MAX (16 * 1024 * 1024)
+#include "catapult/bedrock_shell.h"
 
 #define NR_MASTERS	1
 #define NR_DEVICES	2
@@ -101,9 +95,9 @@ SC_MODULE(Top)
 {
 	iconnect<NR_MASTERS, NR_DEVICES> bus;
 	xilinx_versal_net versal_net;
-	debugdev debugdev_cpm;
 
-	AddressDev address_repeater;
+	// AddressDev address_repeater;
+    BedrockShell bedrock_shell;
 	sc_signal<bool> rst;
 
 	SC_HAS_PROCESS(Top);
@@ -119,9 +113,8 @@ SC_MODULE(Top)
 		sc_module(name),
 		bus("bus"),
 		versal_net("versal-net", sk_descr),
-		debugdev_cpm("debugdev-cpm"),
-
-		address_repeater("address-repeater"),
+		// address_repeater("address-repeater"),
+        bedrock_shell("bedrock-shell"),
 		rst("rst")
 	{
 		m_qk.set_global_quantum(quantum);
@@ -139,14 +132,14 @@ SC_MODULE(Top)
 		// [0xe4100000] : Memory 2 MB
 		// [0xe4300000] : Memory 2 MB
 		//
-		bus.memmap(0xe4000000ULL, 0x100 - 1,
-				ADDRMODE_RELATIVE, -1, debugdev_cpm.socket);
-	    bus.memmap(0xe4000000ULL + 0x100, UINT64_MAX,
-			    ADDRMODE_RELATIVE, -1, address_repeater.tgt_socket);
+	    bus.memmap(0xe4000000ULL, CATAPULT_MMIO_MAX - 1,
+			    ADDRMODE_RELATIVE, -1, bedrock_shell.tgt_socket);
+//	    bus.memmap(0x0LL, UINT64_MAX,
+//			    ADDRMODE_RELATIVE, -1, address_repeater.tgt_socket);
 //		bus.memmap(0xe4040000ULL, 0x100 - 1,
 //				ADDRMODE_RELATIVE, -1, address_repeater.tgt_socket);
-//		bus.memmap(0x0LL, UINT64_MAX,
-//				ADDRMODE_RELATIVE, -1, *(versal_net.s_cpm));
+  		bus.memmap(0x0LL, UINT64_MAX,
+  				ADDRMODE_RELATIVE, -1, *(versal_net.s_cpm));
 
 		//
 		// Bus masters
@@ -154,7 +147,7 @@ SC_MODULE(Top)
 		versal_net.m_cpm->bind(*(bus.t_sk[0]));
 
 		/* Connect the PL irqs to the irq_pl_to_ps wires.  */
-		debugdev_cpm.irq(versal_net.pl2ps_irq[0]);
+		// debugdev_cpm.irq(versal_net.pl2ps_irq[0]);
 
 		/* Tie off any remaining unconnected signals.  */
 		versal_net.tie_off();
