@@ -93,6 +93,31 @@ void BedrockShell::b_transport(tlm::tlm_generic_payload& trans,
 
 size_t BedrockShell::read_register(uint64_t address, size_t length, uint64_t& value)
 {
+    // Check range.
+
+    if ((address & 0xffffffffff000000) != 0)
+    {
+        cout << "BedrockShell: read 0x" << std::hex << address << " past end of BAR" << endl;
+        return 0;
+    }
+
+    // Check for soft registers first (bits [23:21] == 0b100 and bit 20 == 0)
+    if (address & 0x00f00000) == 0x00800000)
+    {
+        auto softreg = ((address & 0x1FFFF8)  >> 3);
+        cout << "BedrockShell: read 0x" << std::hex << address << " softshell register 0x" << hex << softreg << endl;
+        value = softreg;
+        return sizeof(uint64_t);
+    }
+
+    // check for a DMA register.
+    if ((address & 0x00f00000) == 0x0090'0000)
+    {
+        cout << "BedrockShell: read 0x" << std::hex << address << " DMA regsister ... not implemented" << endl;
+        return 0;
+    }
+
+
     for (const auto& fn = _simple_regs.find(address); 
          fn != _simple_regs.end();)
     {
@@ -129,6 +154,7 @@ void BedrockShell::init_registers()
     _simple_regs[0x0D34] = make_pair("shell.013.unused",            0xaaaaaaaa );
     _simple_regs[0x0E34] = make_pair("shell.014.unused",            0xaaaaaaaa );
     _simple_regs[0x0F34] = make_pair("shell.015.unused",            0x00000000 );
+
     _simple_regs[0x1034] = make_pair("shell.016.unused",            0xaaaaaaaa );
     _simple_regs[0x1134] = make_pair("shell.017.unused",            0xaaaaaaaa );
     _simple_regs[0x1234] = make_pair("shell.018.unused",            0x00000000 );
@@ -143,9 +169,9 @@ void BedrockShell::init_registers()
     _simple_regs[0x1B34] = make_pair("shell.027.nic_tor_debug0",    0x00000000 );
     _simple_regs[0x1C34] = make_pair("shell.028.nic_tor_debug1",    0x00000000 );
     _simple_regs[0x1D34] = make_pair("shell.029.nic_tor_debug2",    0x00e01400 );
-
     _simple_regs[0x1E34] = make_pair("shell.030.tor_tx_psop_ctr",   0x00000000 );
     _simple_regs[0x1F34] = make_pair("shell.031.tor_rx_psop_ctr",   0x00000000 );
+    
     _simple_regs[0x2034] = make_pair("shell.032.nic_tx_psop_ctr",   0x00000000 );
     _simple_regs[0x2134] = make_pair("shell.033.nic_rx_psop_ctr",   0x00000000 );
     _simple_regs[0x2234] = make_pair("shell.034.pcie_dma_health",   0x00000000 );
@@ -156,14 +182,13 @@ void BedrockShell::init_registers()
     _simple_regs[0x2734] = make_pair("shell.039.unused",            0x00000000 );
     _simple_regs[0x2834] = make_pair("shell.040.legacy_net_test0",  0xaaaaaaaa );
     _simple_regs[0x2934] = make_pair("shell.041.legacy_net_test1",  0xaaaaaaaa );
-
     _simple_regs[0x2A34] = make_pair("shell.042.nic_mac_health",    0x000c0000 );
     _simple_regs[0x2B34] = make_pair("shell.043.tor_mac_health",    0x100c5002 );
-
     _simple_regs[0x2C34] = make_pair("shell.044.qsfp_retimer_hlth", 0x00000000 );
     _simple_regs[0x2D34] = make_pair("shell.045.slim40g_nic_health",0x00000000 );
     _simple_regs[0x2E34] = make_pair("shell.046.slim40g_tor_health",0x00000000 );
     _simple_regs[0x2F34] = make_pair("shell.047.slim40g_version",   0x00000000 );
+
     _simple_regs[0x3034] = make_pair("shell.048.unused",            0x00000000 );
     _simple_regs[0x3134] = make_pair("shell.049.tor_rx_pdrop_ctr",  0x00000000 );
     _simple_regs[0x3234] = make_pair("shell.050.nic_rx_pdrop_ctr",  0x00000000 );
@@ -173,9 +198,7 @@ void BedrockShell::init_registers()
     _simple_regs[0x3634] = make_pair("shell.054.ddr_reset_ctrl_in", 0x00000000 );
     _simple_regs[0x3734] = make_pair("shell.055.ddr_reset_ctrl_out",0x00000000 );
     _simple_regs[0x3834] = make_pair("shell.056.board_revision",    0x00000000 );
-
     _simple_regs[0x3934] = make_pair("shell.057.shl_patch_board_id",0x000d00d0 );   // making up delta shell revision & board ID
-
     _simple_regs[0x3A34] = make_pair("shell.058.shell_release_ver", 0x00010001 );
     _simple_regs[0x3B34] = make_pair("shell.059.build_info",        []() {
         uint32_t v = 0;
@@ -189,18 +212,13 @@ void BedrockShell::init_registers()
 
         return v;
     }());
-
-
     _simple_regs[0x3C34] = make_pair("shell.060.shell_src_version", 0xa311adcf );
-
     _simple_regs[0x3D34] = make_pair("shell.061.asl_version",       0x00020000 );
     _simple_regs[0x3E34] = make_pair("shell.062.chip_id0",          0x01234567 );
     _simple_regs[0x3F34] = make_pair("shell.063.chip_id1",          0x89abcdef );
 
     _simple_regs[0x4034] = make_pair("shell.064.shell_id",          0x00bed70c ); // 0x00de17a0 );
-
     _simple_regs[0x4134] = make_pair("shell.065.role_version",      0xfacecafe );
-
     _dynamic_regs[0x4234]= make_pair("shell.066.cycle_counter0",   
                                      [this](uint64_t, size_t, uint64_t& v) { 
                                         v = this->get_cycle_counter(true); 
@@ -251,7 +269,6 @@ void BedrockShell::init_registers()
 
     _simple_regs[0x4C34] = make_pair("shell.076.pcie_0_version",    0x00010001 );
     _simple_regs[0x4D34] = make_pair("shell.077.pcie_1_version",    0x00010001 );
-
     _simple_regs[0x4E34] = make_pair("shell.078.ddr1_status",       0x00000001 );
     _simple_regs[0x4F34] = make_pair("shell.079.ddr1_ecc_counter",  0x00000000 );
 
@@ -305,6 +322,41 @@ void BedrockShell::init_registers()
     _simple_regs[0x7D34] = make_pair("shell.125.unused",            0x00000000 );
     _simple_regs[0x7E34] = make_pair("shell.126.unused",            0x00000000 );
     _simple_regs[0x7F34] = make_pair("shell.127.unused",            0x00000000 );
+
+    // Add ASMI registers
+    _simple_regs[0x00A4] = make_pair("asmi.000.flash_status",       0xffffffff );
+    _simple_regs[0x01A4] = make_pair("asmi.001.rdid_status",        0xffffffff );
+    _simple_regs[0x02A4] = make_pair("asmi.002.read_flash_address", 0xffffffff );
+    _simple_regs[0x03A4] = make_pair("asmi.003.enable_4_byte_mode", 0xffffffff );
+    _simple_regs[0x04A4] = make_pair("asmi.004.enable_protect",     0xffffffff );
+    _simple_regs[0x05A4] = make_pair("asmi.005.read_4_bytes",       0xffffffff );
+    _simple_regs[0x06A4] = make_pair("asmi.006.write_4_bytes",      0xffffffff );
+    _simple_regs[0x07A4] = make_pair("asmi.007.page_write",         0xffffffff );
+    _simple_regs[0x08A4] = make_pair("asmi.008.sector_erase",       0xffffffff );
+    _simple_regs[0x09A4] = make_pair("asmi.009.write_enable",       0xffffffff );
+    _simple_regs[0x0AA4] = make_pair("asmi.010.rsu_read_param",     0xffffffff );
+    _simple_regs[0x0BA4] = make_pair("asmi.011.rsu_write_param",    0xffffffff );
+    _simple_regs[0x0CA4] = make_pair("asmi.012.trigger_reconfig",   0xffffffff );
+    _simple_regs[0x0DA4] = make_pair("asmi.013.arm_reconfig",       0xffffffff );
+    _simple_regs[0x0EA4] = make_pair("asmi.014.asmi_fifo_level",    0xffffffff );
+    _simple_regs[0x0FA4] = make_pair("asmi.015.asmi_major_version", 0x80000000 );
+
+    _simple_regs[0x10A4] = make_pair("asmi.016.asmi_key",           0xffffffff );
+    _simple_regs[0x11A4] = make_pair("asmi.017.asmi_status",        0xffffffff );
+    _simple_regs[0x12A4] = make_pair("asmi.018.asmi_control",       0xffffffff );
+    _simple_regs[0x13A4] = make_pair("asmi.019.asmi_fifo_status",   0xffffffff );
+    _simple_regs[0x14A4] = make_pair("asmi.020.asmi_burst_sector",  0xffffffff );
+    _simple_regs[0x15A4] = make_pair("asmi.021.asmi_feature_enable",0xffffffff );
+    _simple_regs[0x16A4] = make_pair("asmi.022.asmi_rsu_status",    0xffffffff );
+    _simple_regs[0x17A4] = make_pair("asmi.023.asmi_rsu_ready",     0xffffffff );
+    _simple_regs[0x18A4] = make_pair("asmi.024.flash_slot_count",   0xffffffff );
+    _simple_regs[0x19A4] = make_pair("asmi.025.flash_slot_size0",   0xffffffff );
+    _simple_regs[0x1AA4] = make_pair("asmi.026.flash_slot_size1",   0xffffffff );
+    _simple_regs[0x1BA4] = make_pair("asmi.027.flash_slot_addr0",   0xffffffff );
+    _simple_regs[0x1CA4] = make_pair("asmi.028.flash_slot_addr1",   0xffffffff );
+    _simple_regs[0x1DA4] = make_pair("asmi.029.flash_slot_type",    0xffffffff );
+    _simple_regs[0x1EA4] = make_pair("asmi.030.flash_total_size0",  0x80000000 );
+    _simple_regs[0x1FA4] = make_pair("asmi.031.flash_total_size1",  0x80000000 );
 
     cout << "init_regs: simple_regs  length = " << _simple_regs.size() << endl;
     cout << "init_regs: dynamic_regs length = " << _dynamic_regs.size() << endl;
