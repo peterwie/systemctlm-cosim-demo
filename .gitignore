@@ -1,8 +1,12 @@
 *.o
 *.d
 *.a
+*.swp
+
 *_demo
 .config.mk
 trace.vcd
 
 /bedrock_cdx
+/versal_net_cdx_stub
+/pcie/versal/*-demo

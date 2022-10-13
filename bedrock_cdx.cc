@@ -46,7 +46,7 @@ using namespace std;
 #include "tlm-extensions/genattr.h"
 #include "memory.h"
 
-#include "catapult/bedrock_shell.h"
+#include "catapult/catapult_device.h"
 
 #define NR_MASTERS	1
 #define NR_DEVICES	2
@@ -97,7 +97,7 @@ SC_MODULE(Top)
 	xilinx_versal_net versal_net;
 
 	// AddressDev address_repeater;
-    BedrockShell bedrock_shell;
+    CatapultDevice catapult_dev;
 	sc_signal<bool> rst;
 
 	SC_HAS_PROCESS(Top);
@@ -114,7 +114,7 @@ SC_MODULE(Top)
 		bus("bus"),
 		versal_net("versal-net", sk_descr),
 		// address_repeater("address-repeater"),
-        bedrock_shell("bedrock-shell"),
+        catapult_dev("catapult_dev"),
 		rst("rst")
 	{
 		m_qk.set_global_quantum(quantum);
@@ -132,12 +132,8 @@ SC_MODULE(Top)
 		// [0xe4100000] : Memory 2 MB
 		// [0xe4300000] : Memory 2 MB
 		//
-	    bus.memmap(0xe4000000ULL, CATAPULT_MMIO_MAX - 1,
-			    ADDRMODE_RELATIVE, -1, bedrock_shell.tgt_socket);
-//	    bus.memmap(0x0LL, UINT64_MAX,
-//			    ADDRMODE_RELATIVE, -1, address_repeater.tgt_socket);
-//		bus.memmap(0xe4040000ULL, 0x100 - 1,
-//				ADDRMODE_RELATIVE, -1, address_repeater.tgt_socket);
+	    bus.memmap(0xe4000000ULL, CatapultDevice::mmio_size - 1,
+			    ADDRMODE_RELATIVE, -1, catapult_dev.tgt_socket);
   		bus.memmap(0x0LL, UINT64_MAX,
   				ADDRMODE_RELATIVE, -1, *(versal_net.s_cpm));
 
