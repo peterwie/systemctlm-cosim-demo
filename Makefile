@@ -43,7 +43,7 @@ SYSTEMC_LIBDIR ?= $(SYSTEMC)/lib-linux64
 # TLM2 ?= /opt/systemc/TLM-2009-07-15
 endif
 
-CATAPULT_INCLUDE ?= /src/cdx/Azure-CloudFPGA-Core/src/Catapult/include
+CATAPULT_INCLUDE ?= ../Azure-CloudFPGA-Core/src/Catapult/include
 
 SCML ?= /usr/local/scml-2.3/
 SCML_INCLUDE ?= $(SCML)/include/
@@ -314,8 +314,8 @@ endif
 
 # everything: $(TARGETS)
 
-# all: $(TARGET_BEDROCK_CDX)
-all: $(TARGETS)
+all: $(TARGET_BEDROCK_CDX)
+# all: $(TARGETS)
 
 -include $(ZYNQ_OBJS:.o=.d)
 -include $(ZYNQMP_OBJS:.o=.d)
