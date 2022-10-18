@@ -31,16 +31,19 @@ using namespace sc_core;
 using namespace sc_dt;
 using namespace std;
 
+using namespace Catapult;
+
 const char* tlm_commands[] = {
     "read  ",
     "write ",
     "ignore",
 };
 
-CatapultDevice::CatapultDevice(sc_core::sc_module_name name) :
+CatapultDevice::CatapultDevice(sc_core::sc_module_name name, const CatapultDeviceOptions& opts) :
     sc_module(name),
     tgt_socket("tgt-socket"),
-    _shell_regs()
+    options(opts),
+    _shell_regs("core")
 {
     tgt_socket.register_b_transport(this, &CatapultDevice::b_transport);
 
@@ -58,18 +61,20 @@ void CatapultDevice::b_transport(tlm::tlm_generic_payload& trans,
     enum tlm::tlm_command cmd = trans.get_command();
     const char* cmd_name = cmd <= tlm::TLM_IGNORE_COMMAND ? tlm_commands[cmd] : "??????";
 
-    cout << "CatapultDevice: " << cmd_name << " cmd @ 0x" << std::hex << addr << " for 0x" << std::hex << len << " bytes." << endl;
+    auto log_inbound = [&]() -> std::ostream& {
+        return (cout << "CatapultDevice: " << cmd_name << " cmd @ 0x" << std::hex << addr << " for 0x" << std::hex << len << " bytes");
+    };
 
     if (len != 4 && len != 8)
     {
-        cout << "CatapultDevice: len " << len << " invalid." << endl;
+        log_inbound() << " - invalid length" << endl;
         trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
         return;
     }
 
     if (trans.get_byte_enable_ptr())
     {
-        cout << "CatapultDevice: byte_enable_ptr not supported" << endl;
+        log_inbound() << " - byte_enable_ptr not supported" << endl;
         trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
         return;
     }
@@ -117,10 +122,17 @@ void CatapultDevice::b_transport(tlm::tlm_generic_payload& trans,
         uint64_t value = 0xdeadbeefdeadbeef;
 
         size_t bytes_read = (this->*read_fn)(addr, len, value);
-        cout << "CatapultDevice: read completed with length " << bytes_read << " and value " << std::hex << value << endl;
-        memcpy(reinterpret_cast<void*>(data),
-               reinterpret_cast<const void *>(&value),
-               max(len, bytes_read));
+
+        if (bytes_read == 0)
+        {
+            cout << "CatapultDevice: read completed with length " << bytes_read /* << " and value " << std::hex << value */ << endl;
+        }
+        else
+        {
+            memcpy(reinterpret_cast<void*>(data),
+                reinterpret_cast<const void *>(&value),
+                max(len, bytes_read));
+        }
     }
     else if (trans.is_write())
     {
@@ -135,13 +147,13 @@ void CatapultDevice::b_transport(tlm::tlm_generic_payload& trans,
 
 size_t CatapultDevice::read_external_register(uint64_t address, size_t length, uint64_t& value)
 {
-    cout << "CatapultDevice: read past end of valid registers" << endl;
+    cout << "CatapultDevice: read " << std::showbase << std::hex << address << " past end of valid registers" << endl;
     return 0;
 }
 
-size_t CatapultDevice::write_external_register(uint64_t, size_t, uint64_t)
+size_t CatapultDevice::write_external_register(uint64_t address, size_t, uint64_t)
 {
-    cout << "CatapultDevice: write past end of valid registers" << endl;
+    cout << "CatapultDevice: write " << std::showbase << std::hex << address << " past end of valid registers" << endl;
     return 0;
 }
 
@@ -181,9 +193,9 @@ size_t CatapultDevice::write_soft_register(uint64_t address, size_t length, uint
 {
     auto reg_type = get_address_type(address);
 
-    cout << "CatapultDevice: write of unimplemented " 
+    cout << "CatapultDevice: write of unimplemented "
          << (reg_type == soft ? "soft" : "dma")
-         << " register 0x" 
+         << " register 0x"
          << hex << address << endl;
     return 0;
 }
@@ -192,6 +204,14 @@ size_t CatapultDevice::read_shell_register(uint64_t address, size_t length, uint
 {
     uint32_t value32;
 
+    // valid shell register addresses all end with 0x4 - something about trying
+    // to block 64b reads of the shell registers.
+    if ((address & 0x7) != 0x4)
+    {
+        value = 0;
+        return length;
+    }
+
     if (_shell_regs.read_register(address, sizeof(uint32_t), value32))
     {
         value = value32;
@@ -199,7 +219,8 @@ size_t CatapultDevice::read_shell_register(uint64_t address, size_t length, uint
     }
     else
     {
-        return 0;
+        value = static_cast<uint64_t>(-1);
+        return length;
     }
 }
 
@@ -279,8 +300,8 @@ void CatapultDevice::init_registers()
     _shell_regs.add(0x3834, "shell.056.board_revision",    0x00000000 );
     _shell_regs.add(0x3934, "shell.057.shl_patch_board_id",0x000d00d0 );   // making up delta shell revision & board ID
     _shell_regs.add(0x3A34, "shell.058.shell_release_ver", 0x00010001 );
-    _shell_regs.add(0x3B34, "shell.059.build_info",        
-        [](uint64_t, uint32_t& v, decltype(_shell_regs)::Register*) 
+    _shell_regs.add(0x3B34, "shell.059.build_info",
+        [](uint64_t, uint32_t& v, decltype(_shell_regs)::Register*)
         {
             v = 0;
 
@@ -350,10 +371,20 @@ void CatapultDevice::init_registers()
     _shell_regs.add(0x4934, "shell.073.ddr0_status",       0x00000001 );
 
     _shell_regs.add(0x4A34, "shell.074.ddr0_ecc_counter",  0x00000000 );
-    _shell_regs.add(0x4B34, "shell.075.pcie_dma_engine",   []() {
+    _shell_regs.add(0x4B34, "shell.075.pcie_dma_engine",   [this]() {
         STREAM_DMA_ENGINE_ID_REGISTER r = { 0 };
-        r.HIP_0_engine_id = SLOTS_DMA_ENGINE_ID;
-        r.HIP_1_engine_id = SLOTS_DMA_ENGINE_ID;
+
+        if (this->options.enable_slots_dma)
+        {
+            cout << "SLOTS ENABLED" << endl;
+            r.HIP_0_engine_id = SLOTS_DMA_ENGINE_ID;
+            r.HIP_1_engine_id = SLOTS_DMA_ENGINE_ID;
+        }
+        else
+        {
+            cout << "SLOTS NOT ENABLED" << endl;
+        }
+
         return r.as_ulong;
     }());
 

@@ -34,6 +34,9 @@
 #include "tlm_utils/simple_target_socket.h"
 #include "tlm_utils/tlm_quantumkeeper.h"
 
+#include <vector>
+#include <string>
+
 using namespace sc_core;
 using namespace sc_dt;
 using namespace std;
@@ -47,6 +50,8 @@ using namespace std;
 #include "memory.h"
 
 #include "catapult/catapult_device.h"
+
+using namespace Catapult;
 
 #define NR_MASTERS	1
 #define NR_DEVICES	2
@@ -96,7 +101,6 @@ SC_MODULE(Top)
 	iconnect<NR_MASTERS, NR_DEVICES> bus;
 	xilinx_versal_net versal_net;
 
-	// AddressDev address_repeater;
     CatapultDevice catapult_dev;
 	sc_signal<bool> rst;
 
@@ -109,12 +113,11 @@ SC_MODULE(Top)
 		rst.write(false);
 	}
 
-	Top(sc_module_name name, const char *sk_descr, sc_time quantum) :
+	Top(sc_module_name name, const char *sk_descr, sc_time quantum, CatapultDeviceOptions catapult_opts) :
 		sc_module(name),
 		bus("bus"),
 		versal_net("versal-net", sk_descr),
-		// address_repeater("address-repeater"),
-        catapult_dev("catapult_dev"),
+        catapult_dev("catapult_dev", catapult_opts),
 		rst("rst")
 	{
 		m_qk.set_global_quantum(quantum);
@@ -155,9 +158,11 @@ private:
 	tlm_utils::tlm_quantumkeeper m_qk;
 };
 
-void usage(void)
+void usage(const char* program_name)
 {
-	cout << "tlm socket-path sync-quantum-ns" << endl;
+	cout << program_name << " socket-path [sync-quantum-ns] [--] [options]" << endl;
+	cout << "options include:" << endl;
+	cout << "  --slots - enables slots DMA engine" << endl;
 }
 
 int sc_main(int argc, char* argv[])
@@ -166,20 +171,96 @@ int sc_main(int argc, char* argv[])
 	uint64_t sync_quantum;
 	sc_trace_file *trace_fp = NULL;
 
-	if (argc < 3) {
+	const char* socket_path = NULL;
+	const char* quantum_arg = NULL;
+
+	CatapultDeviceOptions catapult_opts;
+
+	// check for help
+	int positional = 1;
+	for (int i = 1; i < argc; i +=1) {
+		if (strcmp(argv[i], "--help") == 0 ||
+		    strcmp(argv[i], "-h") == 0 ||
+			strcmp(argv[i], "-?") == 0) {
+
+			usage(argv[0]);
+			return -1;
+		}
+
+		const char* arg = argv[i];
+
+		// handle the positional arguments
+		if (arg[0] != '-')
+		{
+			if (positional == 1)
+			{
+				if (socket_path != nullptr)
+				{
+					cout << "socket_path argument provided mutliple times" << endl;
+					usage(argv[0]);
+					return -1;
+				}
+
+				socket_path = arg;
+				positional += 1;
+				continue;
+			}
+			else if (positional == 2)
+			{
+				if (quantum_arg != nullptr)
+				{
+					cout << "quantum_arg argument provided mutliple times" << endl;
+					usage(argv[0]);
+					return -1;
+				}
+
+				quantum_arg = arg;
+				positional +=1;
+				continue;
+			}
+			else
+			{
+				cout << "unrecognized positional argument '" << arg << "'" << endl;
+				usage(argv[0]);
+				return -1;
+			}
+		}
+		else if (arg[1] == '1' && arg[2] == '\0')
+		{
+			// ignore -- argument
+			continue;
+		}
+
+		// remove - and -- from the start of the argument
+		arg += (arg[1] == '-' ? 2 : 1);
+
+		if (strcasecmp("slots", arg) == 0) {
+			cout << "catapult: enabling slots" << endl;
+			catapult_opts.enable_slots_dma = true;
+		}
+	}
+
+	if (socket_path == nullptr)
+	{
+		cout << "required socket_path parameter not provided" << endl;
+		usage(argv[0]);
+		return -1;
+	}
+
+	if (quantum_arg == nullptr) {
 		sync_quantum = 10000;
 	} else {
-		sync_quantum = strtoull(argv[2], NULL, 10);
+		sync_quantum = strtoull(quantum_arg, NULL, 10);
 	}
 
 	sc_set_time_resolution(1, SC_PS);
 
-	top = new Top("top", argv[1], sc_time((double) sync_quantum, SC_NS));
+	top = new Top("top", argv[1], sc_time((double) sync_quantum, SC_NS), catapult_opts);
 
 	if (argc < 3) {
 		sc_start(1, SC_PS);
 		sc_stop();
-		usage();
+		usage(argv[0]);
 		exit(EXIT_FAILURE);
 	}
 

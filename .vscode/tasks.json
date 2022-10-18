@@ -6,7 +6,12 @@
         {
             "label": "make",
             "type": "shell",
-            "command": "make bedrock_cdx"
+            "command": "make bedrock_cdx",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
         }
     ]
 }
