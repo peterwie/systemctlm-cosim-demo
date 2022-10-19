@@ -303,14 +303,19 @@ void CatapultDevice::init_registers()
     _shell_regs.add(0x3B34, "shell.059.build_info",
         [](uint64_t, uint32_t& v, decltype(_shell_regs)::Register*)
         {
-            v = 0;
+            SHELL_BUILD_INFO_REGISTER r = { 0 };
 
             auto t = std::time(nullptr);
             auto tm = std::localtime(&t);
 
-            v |= (((uint16_t) tm->tm_year - 2013) & 0x0f) << 12;
-            v |= (((uint16_t) tm->tm_mon)         & 0x0f) << 8;
-            v |= (((uint16_t) tm->tm_mday)        & 0x1f) << 2;
+            r.u.verbump = 0;
+            r.u.day = tm->tm_mday;
+            r.u.month = tm->tm_mon;
+            r.u.year = tm->tm_year - 2013;
+            r.u.clean = 1;
+            r.u.tfsbuild = 1;
+
+            v = r.as_ulong;
 
             return true;
         }
