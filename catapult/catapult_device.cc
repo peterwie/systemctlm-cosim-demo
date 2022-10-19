@@ -322,8 +322,8 @@ void CatapultDevice::init_registers()
         );
     _shell_regs.add(0x3C34, "shell.060.shell_src_version", 0xa311adcf );
     _shell_regs.add(0x3D34, "shell.061.asl_version",       0x00020000 );
-    _shell_regs.add(0x3E34, "shell.062.chip_id0",          0x01234567 );
-    _shell_regs.add(0x3F34, "shell.063.chip_id1",          0x89abcdef );
+    _shell_regs.add(0x3E34, "shell.062.chip_id0",          0x89abcdef );
+    _shell_regs.add(0x3F34, "shell.063.chip_id1",          0x01234567 );
 
     _shell_regs.add(0x4034, "shell.064.shell_id",          0x00bed70c ); // 0x00de17a0 );
     _shell_regs.add(0x4134, "shell.065.role_version",      0xfacecafe );
