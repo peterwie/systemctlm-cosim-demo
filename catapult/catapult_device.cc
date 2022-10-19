@@ -43,8 +43,8 @@ const char* tlm_commands[] = {
 
 CatapultDevice::CatapultDevice(sc_core::sc_module_name name, const CatapultDeviceOptions& opts) :
     sc_module(name),
-    target_socket("tgt-socket"),
-    init_socket("init-socket"),
+    target_socket("target-socket"),
+    initiator_socket("initiator-socket"),
     options(opts),
     _shell_regs("core"),
     _dma_regs("dma")

@@ -59,16 +59,16 @@ using namespace Catapult;
 class SMIDdev : public sc_core::sc_module
 {
 public:
-    tlm_utils::simple_target_socket<SMIDdev> tgt_socket;
-    tlm_utils::simple_initiator_socket<SMIDdev> init_socket;
+    tlm_utils::simple_target_socket<SMIDdev> target_socket;
+    tlm_utils::simple_initiator_socket<SMIDdev> initiator_socket;
 
     SMIDdev(sc_core::sc_module_name name, uint32_t smid) :
         sc_module(name),
-        tgt_socket("tgt-socket"),
-        init_socket("init-socket"),
+        target_socket("tgt-socket"),
+        initiator_socket("init-socket"),
         m_smid(smid)
     {
-        tgt_socket.register_b_transport(this, &SMIDdev::b_transport);
+        target_socket.register_b_transport(this, &SMIDdev::b_transport);
     }
 
 private:
@@ -88,7 +88,7 @@ private:
         //
         genattr->set_master_id(m_smid);
 
-        init_socket->b_transport(trans, delay);
+        initiator_socket->b_transport(trans, delay);
     }
 
     uint32_t m_smid;
@@ -137,7 +137,7 @@ SC_MODULE(Top)
 		// [0xe4300000] : Memory 2 MB
 		//
 	    bus.memmap(0xe4000000ULL, CatapultDevice::mmio_size - 1,
-			    ADDRMODE_RELATIVE, -1, catapult_dev.tgt_socket);
+			    ADDRMODE_RELATIVE, -1, catapult_dev.target_socket);
   		bus.memmap(0x0LL, UINT64_MAX,
   				ADDRMODE_RELATIVE, -1, *(versal_net.s_cpm));
 
@@ -145,10 +145,10 @@ SC_MODULE(Top)
 		// Bus masters
 		//
 		versal_net.m_cpm->bind(*(bus.t_sk[0]));
-		smid_catapult_dev.init_socket(*(bus.t_sk[1]));
+		smid_catapult_dev.initiator_socket(*(bus.t_sk[1]));
 
 		// bind devices to their bus-masters
-		catapult_dev.init_socket(smid_catapult_dev.tgt_socket);
+		catapult_dev.initiator_socket(smid_catapult_dev.target_socket);
 
 		/* Connect the PL irqs to the irq_pl_to_ps wires.  */
 		// debugdev_cpm.irq(versal_net.pl2ps_irq[0]);

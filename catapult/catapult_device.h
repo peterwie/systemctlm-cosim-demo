@@ -116,7 +116,7 @@ namespace Catapult
 
         // member variables
         tlm_utils::simple_target_socket<CatapultDevice> target_socket;
-        tlm_utils::simple_initiator_socket<CatapultDevice> init_socket;
+        tlm_utils::simple_initiator_socket<CatapultDevice> initiator_socket;
 
         CatapultDeviceOptions options;
 
