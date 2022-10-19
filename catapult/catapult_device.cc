@@ -381,13 +381,8 @@ void CatapultDevice::init_registers()
 
         if (this->options.enable_slots_dma)
         {
-            cout << "SLOTS ENABLED" << endl;
             r.HIP_0_engine_id = SLOTS_DMA_ENGINE_ID;
             r.HIP_1_engine_id = SLOTS_DMA_ENGINE_ID;
-        }
-        else
-        {
-            cout << "SLOTS NOT ENABLED" << endl;
         }
 
         return r.as_ulong;
