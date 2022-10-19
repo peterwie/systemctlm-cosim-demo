@@ -31,8 +31,9 @@
 #include <signal.h>
 #include <unistd.h>
 
-#include <map>
 #include <functional>
+#include <iomanip>
+#include <map>
 #include <utility>
 
 #include "systemc.h"
@@ -62,8 +63,8 @@ namespace Catapult
         typedef bool (ReadFn)(uint64_t address,  R& output_value, Register* reg);
         typedef bool (WriteFn)(uint64_t address, R new_value, Register* reg);
 
-        typedef std::function<ReadFn>  ReadFnObj;
-        typedef std::function<WriteFn> WriteFnObj;
+        typedef function<ReadFn>  ReadFnObj;
+        typedef function<WriteFn> WriteFnObj;
 
         const class WriteableRegisterT { const uint32_t _dummy = 0; } WriteableRegister;
 
@@ -153,13 +154,13 @@ namespace Catapult
             }
         };
 
-        RegisterMap(const std::string& map_name) : _name(map_name) { }
+        RegisterMap(const string& map_name) : _name(map_name) { }
 
     private:
-        std::string _name;
+        string _name;
 
         // Simple register reads ... map contains a static 32b value for the register.
-        std::map<uint64_t, Register> _map;
+        map<uint64_t, Register> _map;
 
     public:
 
@@ -190,7 +191,7 @@ namespace Catapult
             // if we did not find any match, return false.
             if (reg == _map.end())
             {
-                cout << "CatapultDevice: registermap " << _name << " " << std::showbase << std::hex << address << " not found in map" << endl;
+                cout << "CatapultDevice: registermap " << _name << " " << showbase << hex << address << " not found in map" << endl;
                 return false;
             }
 
@@ -198,21 +199,20 @@ namespace Catapult
             // call the register read function
             bool result = reg->second.read(address, value);
 
-            cout << "CatapultDevice: registermap " << _name << " "
-                << std::showbase << std::hex << address
-                << " : " << reg->second.name << " "
-                << " = ";
+            cout << "CatapultDevice: rmap " << _name << "  read "
+                 << showbase << setw(6) << setfill('0') << hex << address
+                 << " (" << reg->second.name << ") => ";
 
             if (result)
             {
-                cout << std::showbase << std::hex << value;
+                cout << showbase << hex << value;
             }
             else
             {
                 cout << "(no data)";
             }
 
-            cout << std::endl;
+            cout << endl;
             return result;
         }
 
@@ -223,11 +223,21 @@ namespace Catapult
 
             if (reg == _map.end())
             {
+                cout << "CatapultDevice: registermap " << _name << " " << showbase << hex << address << " not found in map" << endl;
                 return false;
             }
 
             // call the register write function
-            return reg->second.write(address, value);
+            bool result = reg->second.write(address, value);
+
+            cout << "CatapultDevice: rmap " << _name << " write "
+                << showbase << setw(6) << setfill('0') << hex << address
+                << " (" << reg->second.name << ") <= "
+                << showbase << hex << value
+                << (result ? " ok " : " err")
+                << endl;
+
+            return result;
         }
     };
 
