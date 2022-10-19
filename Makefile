@@ -314,8 +314,8 @@ endif
 
 # everything: $(TARGETS)
 
-all: $(TARGET_BEDROCK_CDX)
-# all: $(TARGETS)
+# all: $(TARGET_BEDROCK_CDX)
+all: $(TARGETS)
 
 -include $(ZYNQ_OBJS:.o=.d)
 -include $(ZYNQMP_OBJS:.o=.d)

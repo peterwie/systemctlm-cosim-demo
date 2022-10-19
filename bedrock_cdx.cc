@@ -53,47 +53,45 @@ using namespace std;
 
 using namespace Catapult;
 
-#define NR_MASTERS	1
+#define NR_MASTERS	2
 #define NR_DEVICES	2
 
-class AddressDev : public sc_core::sc_module
+class SMIDdev : public sc_core::sc_module
 {
 public:
+    tlm_utils::simple_target_socket<SMIDdev> tgt_socket;
+    tlm_utils::simple_initiator_socket<SMIDdev> init_socket;
 
-	tlm_utils::simple_target_socket<AddressDev> tgt_socket;
-
-	AddressDev(sc_core::sc_module_name name) :
-		sc_module(name),
-		tgt_socket("tgt-socket")
-	{
-		tgt_socket.register_b_transport(this, &AddressDev::b_transport);
-	}
+    SMIDdev(sc_core::sc_module_name name, uint32_t smid) :
+        sc_module(name),
+        tgt_socket("tgt-socket"),
+        init_socket("init-socket"),
+        m_smid(smid)
+    {
+        tgt_socket.register_b_transport(this, &SMIDdev::b_transport);
+    }
 
 private:
-	virtual void b_transport(tlm::tlm_generic_payload& trans,
-			sc_time& delay)
-	{
-		// tlm::tlm_command cmd = trans.get_command();
-		unsigned char *data = trans.get_data_ptr();
-		size_t len = trans.get_data_length();
-		uint64_t addr = trans.get_address();
+    virtual void b_transport(tlm::tlm_generic_payload& trans,
+            sc_time& delay)
+    {
+        genattr_extension *genattr;
 
-        uint64_t value = addr;
+        trans.get_extension(genattr);
+        if (!genattr) {
+            genattr = new genattr_extension();
+            trans.set_extension(genattr);
+        }
 
-		if (len != 4 || trans.get_byte_enable_ptr())
-        {
-			trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
-			return;
-		}
+        //
+        // Setup the SMID (master_id)
+        //
+        genattr->set_master_id(m_smid);
 
-		if (trans.get_command() == tlm::TLM_READ_COMMAND) {
-            cout << "AddressRepeater: read @ 0x" << std::hex << addr << " for 0x" << len << " bytes" << endl;
-			memcpy(reinterpret_cast<void*>(data),
-				   reinterpret_cast<const void *>(&value),
-				   max(len, sizeof(value)));
+        init_socket->b_transport(trans, delay);
+    }
 
-		}
-	}
+    uint32_t m_smid;
 };
 
 SC_MODULE(Top)
@@ -102,6 +100,8 @@ SC_MODULE(Top)
 	xilinx_versal_net versal_net;
 
     CatapultDevice catapult_dev;
+	SMIDdev smid_catapult_dev;
+
 	sc_signal<bool> rst;
 
 	SC_HAS_PROCESS(Top);
@@ -118,6 +118,7 @@ SC_MODULE(Top)
 		bus("bus"),
 		versal_net("versal-net", sk_descr),
         catapult_dev("catapult_dev", catapult_opts),
+		smid_catapult_dev("smid-catapult_dev", 0x250),
 		rst("rst")
 	{
 		m_qk.set_global_quantum(quantum);
@@ -144,6 +145,10 @@ SC_MODULE(Top)
 		// Bus masters
 		//
 		versal_net.m_cpm->bind(*(bus.t_sk[0]));
+		smid_catapult_dev.init_socket(*(bus.t_sk[1]));
+
+		// bind devices to their bus-masters
+		catapult_dev.init_socket(smid_catapult_dev.tgt_socket);
 
 		/* Connect the PL irqs to the irq_pl_to_ps wires.  */
 		// debugdev_cpm.irq(versal_net.pl2ps_irq[0]);

@@ -26,6 +26,8 @@
 
 #include <ctime>
 #include <chrono>
+#include <iomanip>
+#include <sstream>
 
 using namespace sc_core;
 using namespace sc_dt;
@@ -41,13 +43,17 @@ const char* tlm_commands[] = {
 
 CatapultDevice::CatapultDevice(sc_core::sc_module_name name, const CatapultDeviceOptions& opts) :
     sc_module(name),
-    tgt_socket("tgt-socket"),
+    target_socket("tgt-socket"),
+    init_socket("init-socket"),
     options(opts),
-    _shell_regs("core")
+    _shell_regs("core"),
+    _dma_regs("dma")
 {
-    tgt_socket.register_b_transport(this, &CatapultDevice::b_transport);
+    target_socket.register_b_transport(this, &CatapultDevice::b_transport);
 
     init_registers();
+
+    // SC_THREAD(do_slots_engine);
 }
 
 void CatapultDevice::b_transport(tlm::tlm_generic_payload& trans,
@@ -172,31 +178,56 @@ size_t CatapultDevice::write_unimplemented_register(uint64_t address, size_t, ui
 size_t CatapultDevice::read_soft_register(uint64_t address, size_t length, uint64_t& value)
 {
     auto reg_type = get_address_type(address);
+    uint32_t reg_index = static_cast<uint32_t>((address & dma_reg_addr_num_mask) >> soft_reg_addr_num_shift);
+    uint32_t reg_offset = static_cast<uint32_t>(address & soft_reg_offset_mask);
 
-    if (reg_type == soft)
+    if (length == 8 && reg_offset != 0)
     {
-        auto softreg = static_cast<uint32_t>((address & soft_reg_addr_num_mask) >> soft_reg_addr_num_shift);
-        cout << "CatapultDevice: read 0x" << std::hex << address << " softshell register 0x" << hex << softreg << endl;
-        value = softreg;
+        cout << "Invalid 8b soft register read with offset (" << showbase << hex << address << ")" << endl;
+        value = 0xbaadf00dbaadf00d;
+        return 0;
+    }
+
+    if (reg_type == soft || options.enable_slots_dma == false)
+    {
+        cout << "CatapultDevice: read 0x" << std::hex << address << " softshell register 0x" << hex << reg_index << endl;
+        value = ((uint64_t) reg_index << 32) |  reg_index;
         return sizeof(uint64_t);
     }
     else // regtype is DMA
     {
-        auto dmareg = static_cast<uint32_t>((address & dma_reg_addr_num_mask) >> soft_reg_addr_num_shift);
-        cout << "CatapultDevice: read 0x" << std::hex << address << " DMA register 0x" << hex << dmareg << endl;
-        value = 0;
-        return sizeof(uint64_t);
+        cout << "CatapultDevice: read 0x" << std::hex << address << " DMA register 0x" << hex << reg_index << endl;
+
+        value = read_dma_register(reg_index, reg_offset, length);
+        return true;
     }
 }
 
 size_t CatapultDevice::write_soft_register(uint64_t address, size_t length, uint64_t value)
 {
     auto reg_type = get_address_type(address);
+    uint32_t reg_index = static_cast<uint32_t>((address & dma_reg_addr_num_mask) >> soft_reg_addr_num_shift);
+    uint32_t reg_offset = static_cast<uint32_t>(address & soft_reg_offset_mask);
 
-    cout << "CatapultDevice: write of unimplemented "
-         << (reg_type == soft ? "soft" : "dma")
-         << " register 0x"
-         << hex << address << endl;
+    if (length == 8 && reg_offset != 0)
+    {
+        cout << "Invalid 8b soft register write with offset (" << showbase << hex << address << ")" << endl;
+        return 0;
+    }
+
+    if (reg_type == soft || options.enable_slots_dma == false)
+    {
+        cout << "CatapultDevice: write of unimplemented "
+            << (reg_type == soft ? "soft" : "dma")
+            << " register 0x"
+            << hex << address << endl;
+    }
+    else
+    {
+        cout << "CatapultDevice: write 0x" << std::hex << address << " DMA register 0x" << hex << reg_index << " value 0x" << hex << value << endl;
+        write_dma_register(reg_index, reg_offset, length, value);
+    }
+
     return 0;
 }
 
@@ -237,6 +268,12 @@ size_t CatapultDevice::write_shell_register(uint64_t address, size_t length, uin
 }
 
 void CatapultDevice::init_registers()
+{
+    init_shell_registers();
+    init_dma_registers();
+}
+
+void CatapultDevice::init_shell_registers()
 {
     _shell_regs.add(0x0034, "shell.000.control",           0x00000000 );
     _shell_regs.add(0x0134, "shell.001.unused",            0x00000000 );
@@ -480,6 +517,104 @@ void CatapultDevice::init_registers()
     _shell_regs.add(0x1FA4, "asmi.031.flash_total_size1",  0x80000000 );
 
     cout << "init_regs: shell_regs count = " << _shell_regs.size() << endl;
+}
+
+void CatapultDevice::init_dma_registers()
+{
+    // DMA register addresses are pre-shifted by the soft-regsiter r/w handlers
+    // In absolute address terms, a DMA register has:
+    //  [23:20] = 1001b (vs. 1000b for a soft register)
+    //
+    // then for individual registers
+    //  [19:12] = 00000000b
+    //  [11:3]  = register number
+    //  [2:0]   = 0 (ignored)
+    //
+    // for the address registers
+    //  [19:12] = 00000001b
+    //  [11:5]  = 7b slot number
+    //  [4:3]   = address type (input, output or control respectively)
+    //
+    // and for the doorbell registers
+    //  [19]    = 1
+    //  [18:12] = 7b slot number
+    //  [11:3]  = 0 for full doorbells, 1 for done doorbells
+    //
+    // the softreg handlers strip off bit 23, and then right shift by 3.  So that
+    // gives us 18b total
+    //  [17] = 1   (0x2'0000)
+    //
+    // individual regs:     [16:9]  = 0
+    //                      [8:0]   = register number
+    //
+    // address registers:   [16:9]  = 000000001b    (0x200)
+    //                      [8:2]   = 7b slot number
+    //                      [1:0]   = address type
+    //
+    // doorbell registers:  [16]    = 1b    (0x1'0000)
+    //                      [15:9]  = 7b slot number
+    //                      [8:0]   = 0 for full doorbells, 1 for done doorbells
+
+    _dma_regs.add(0x20000, "dma.000.magicvalue",        slots_magic_number );
+    _dma_regs.add(0x20001, "dma.001.buffer_size",                        0 );
+    _dma_regs.add(0x20002, "dma.002.num_buffers",                       64 );
+    _dma_regs.add(0x20003, "dma.003.num_gp_registers",                 128 );
+    _dma_regs.add(0x20004, "dma.004.merged_slots",                       0 );
+    _dma_regs.add(0x20005, "dma.005.isr_rate_limit_threshold",           0 );
+    _dma_regs.add(0x20006, "dma.006.isr_rate_limit_multiplier",          0 );
+    _dma_regs.add(0x20007, "dma.007.unused",                             0 );
+    _dma_regs.add(0x20008, "dma.008.slot_full_status0",                  0 );
+    _dma_regs.add(0x20009, "dma.009.slot_full_status1",                  0 );
+    _dma_regs.add(0x20010, "dma.010.slot_done_status0",                  0 );
+    _dma_regs.add(0x20011, "dma.011.slot_done_status1",                  0 );
+    _dma_regs.add(0x20012, "dma.012.slot_pend_status0",                  0 );
+    _dma_regs.add(0x20013, "dma.013.slot_pend_status1",                  0 );
+    _dma_regs.add(0x20016, "dma.016.health_diag_version",                0 );
+    _dma_regs.add(0x20017, "dma.017.health_diag_full_status",            0 );
+    _dma_regs.add(0x20018, "dma.018.health_diag_sos_cpu_to_fpga",        0 );
+    _dma_regs.add(0x20019, "dma.019.health_diag_sos_fpga_to_cpu",        0 );
+    _dma_regs.add(0x20020, "dma.020.health_diag_sos_interrupt_mode",     0 );
+    _dma_regs.add(0x20021, "dma.021.timeout_interval_setting",           0 );
+    _dma_regs.add(0x20022, "dma.022.timeout_count",                      0 );
+    _dma_regs.add(0x20023, "dma.023.any_avail_slot_ctrl",                0 );
+    _dma_regs.add(0x20024, "dma.024.any_avail_slot_test",                0 );
+
+    const char* address_types[3] = {"input", "output", "ctrl"};
+    const char* doorbell_types[2] = {"full", "done"};
+
+    ostringstream name;
+
+    name.clear();
+
+    // add all the address registers.
+
+    for (uint8_t type_index = 0; type_index < 3; type_index += 1)
+    {
+        uint64_t a = 0x20200 | type_index;
+
+        for (uint8_t slot_index = 0; slot_index < 128; slot_index += 1)
+        {
+            a |= slot_index << 2;
+
+            name.clear();
+            name << "dma.addr_" << address_types[type_index] << setw(3) << setfill('0') << std::dec << slot_index;
+            _dma_regs.add(a, name.str().c_str(), 0);
+        }
+    }
+
+    // add all the doorbell registers
+    for (uint8_t type_index = 0; type_index < 1; type_index += 1)
+    {
+        uint64_t a = 0x30000 | type_index;
+
+        for (uint8_t slot_index = 0; slot_index < 128; slot_index += 1)
+        {
+            a |= slot_index << 9;
+            name.clear();
+            name << "dma.doorbell_" << doorbell_types[type_index] << setw(3) << setfill('0') << std::dec << slot_index;
+            _dma_regs.add(a, name.str().c_str(), 0);
+        }
+    }
 }
 
 uint64_t CatapultDevice::get_cycle_counter()

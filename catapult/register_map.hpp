@@ -54,7 +54,7 @@ namespace Catapult
 {
     using namespace std;
 
-    template<typename R>
+    template<typename R, typename N=const char*>
     class RegisterMap
     {
     public:
@@ -91,7 +91,7 @@ namespace Catapult
 
             }
 
-            const char *name;
+            N name;
             bool is_readonly = true;
 
             R value = 0;
