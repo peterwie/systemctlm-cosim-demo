@@ -10,3 +10,4 @@ trace.vcd
 /bedrock_cdx
 /versal_net_cdx_stub
 /pcie/versal/*-demo
+.config.mk
