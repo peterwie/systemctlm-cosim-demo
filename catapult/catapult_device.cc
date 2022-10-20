@@ -520,6 +520,11 @@ void CatapultDevice::init_shell_registers()
     _shell_regs.add(0x1EA4, "asmi.030.flash_total_size0",  0x80000000 );
     _shell_regs.add(0x1FA4, "asmi.031.flash_total_size1",  0x80000000 );
 
+    // add legacy, undocumented registers
+    _shell_regs.add(0x04f4, "legacy.dma_buffer_size",      MIN_FPGA_BUFFER_SIZE);
+    _shell_regs.add(0x05f4, "legacy.dma_num_slots",        MIN_FPGA_NUM_SLOTS);
+    _shell_regs.add(0x06f4, "legacy.num_gp_regs",          MAX_FPGA_NUM_SHELL_REG);
+
     // add the 32 SOFT_REG_CAPABILITY registers, filled with the 64b
     // soft-reg magic number.
 
