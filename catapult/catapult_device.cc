@@ -339,8 +339,8 @@ void CatapultDevice::init_shell_registers()
     _shell_regs.add(0x3634, "shell.054.ddr_reset_ctrl_in", 0x00000000 );
     _shell_regs.add(0x3734, "shell.055.ddr_reset_ctrl_out",0x00000000 );
     _shell_regs.add(0x3834, "shell.056.board_revision",    0x00000000 );
-    _shell_regs.add(0x3934, "shell.057.shl_patch_board_id",0x000d00d0 );   // making up delta shell revision & board ID
-    _shell_regs.add(0x3A34, "shell.058.shell_release_ver", 0x00010001 );
+    _shell_regs.add(0x3934, "shell.057.shl_patch_board_id",0x000d00d0 );    // making up delta shell revision & board ID
+    _shell_regs.add(0x3A34, "shell.058.shell_release_ver", 0x00040004 );    // Needs to be > 200000 to report support for slot isolation & 64-b soft regs
     _shell_regs.add(0x3B34, "shell.059.build_info",
         [](uint64_t, uint32_t& v, decltype(_shell_regs)::Register*)
         {
