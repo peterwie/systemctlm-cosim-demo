@@ -54,7 +54,7 @@ namespace Catapult
 {
     using namespace std;
 
-    template<typename R, typename N=const char*>
+    template<typename R>
     class RegisterMap
     {
     public:
@@ -91,7 +91,7 @@ namespace Catapult
 
             }
 
-            N name;
+            string name;
             bool is_readonly = true;
 
             R value = 0;
@@ -99,7 +99,7 @@ namespace Catapult
             ReadFnObj  readfn;
             WriteFnObj writefn;
 
-            Register()                                      : name(nullptr) { }
+            Register()                                        { }
             Register(const char* n)                         : name(n) { }
             Register(const char* n, R v)                    : name(n) { value = v; }
             Register(const char* n, WriteableRegisterT)     : name(n), is_readonly(false) { }
@@ -177,12 +177,6 @@ namespace Catapult
             return _map[address] = Register(name, rfn);
         }
 
-        // template<typename... Args>
-        // Register& add(uint64_t address, const char* name, Args... args)
-        // {
-        //     _map[address] = Register(name, args...);
-        // }
-
         bool read_register(uint64_t address, size_t read_size, R& value)
         {
             // locate the address in the register map.
@@ -214,6 +208,21 @@ namespace Catapult
 
             cout << endl;
             return result;
+        }
+
+        Register* find_register(uint64_t address)
+        {
+            // locate the address in the register map.
+            const auto reg = _map.find(address);
+
+            if (reg == _map.end())
+            {
+                return nullptr;
+            }
+            else
+            {
+                return &(reg->second);
+            }
         }
 
         bool write_register(uint64_t address, size_t read_size, R value)

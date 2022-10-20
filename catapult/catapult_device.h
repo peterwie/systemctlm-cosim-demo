@@ -77,14 +77,17 @@ namespace Catapult
                                                     // high b  31 23 15 07
                                                     // low  b  24 16 08 00
         static const uint64_t core_address_type_mask = 0x0000000000f00000 | core_address_zero_mask;  // bits [23:20]
+        static const uint64_t shell_reg_addr_test    = 0x0000000000000000;  // bits [23:20] = 0b0000
+        static const uint64_t dma_alias_addr_test    = 0x0000000000700000;  // bits [23:20] = 0b0111 // i think this is an alias of the DMA space
         static const uint64_t soft_reg_addr_test     = 0x0000000000800000;  // bits [23:20] = 0b1000
         static const uint64_t dma_reg_addr_test      = 0x0000000000900000;  // bits [23:20] = 0b1001
-        static const uint64_t shell_reg_addr_test    = 0x0000000000000000;  // bits [23:20] = 0b0000
 
         static const uint64_t soft_reg_addr_num_mask = 0x00000000001ffff8;  // bits [20:3]
         static const uint64_t dma_reg_addr_num_mask  = 0x00000000000ffff8;  // bits [19:3]
         static const uint64_t soft_reg_offset_mask   = 0x0000000000000007;  // bits [2:0]
         static const int      soft_reg_addr_num_shift= 3;
+
+        static const uint32_t soft_reg_64b_support_magic_number = 0x50F750F7;
 
         static const uint64_t mmio_size              = core_address_valid_mask + 1;
 
@@ -103,8 +106,8 @@ namespace Catapult
             invalid  = 0,
             external = 0x1008,
             shell    = 0x0004,
-            soft     = 0x8008,
-            dma      = 0x9008
+            soft     = 0x0808,
+            dma      = 0x0908
         };
 
         CatapultRegisterType get_address_type(uint64_t address);
@@ -129,7 +132,7 @@ namespace Catapult
         RegisterMap<uint32_t> _shell_regs;
 
         // And a register map for DMA registers
-        RegisterMap<uint64_t, string> _dma_regs;
+        RegisterMap<uint64_t> _dma_regs;
 
         void init_registers(void);
 
@@ -171,5 +174,20 @@ namespace Catapult
         // if 'name' is non-null, prints a testing message to the console.
         bool test_addr(const char* name, uint64_t address, uint64_t mask, uint64_t expected, uint64_t& value);
     };
+
+    inline std::ostream& operator<<(CatapultDevice::CatapultRegisterType t, std::ostream& o)
+    {
+        switch (t)
+        {
+            case CatapultDevice::CatapultRegisterType::invalid:   { o << "invalid"; break; }
+            case CatapultDevice::CatapultRegisterType::external:  { o << "external"; break; }
+            case CatapultDevice::CatapultRegisterType::shell:     { o << "shell"; break; }
+            case CatapultDevice::CatapultRegisterType::soft:      { o << "soft"; break; }
+            case CatapultDevice::CatapultRegisterType::dma:       { o << "dma"; break; }
+            default:        { o << "unknown(" << (int) t << ")"; break; }
+        }
+        return o;
+    }
+
 
 }
