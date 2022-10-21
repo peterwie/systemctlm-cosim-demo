@@ -24,10 +24,12 @@
 
 #include "catapult_device.h"
 
+#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <ctime>
 #include <iomanip>
+#include <numeric>
 #include <sstream>
 
 using namespace sc_core;
@@ -180,7 +182,7 @@ size_t CatapultDevice::read_soft_register(uint64_t address, size_t length, uint6
 {
     auto reg_type = get_address_type(address);
 
-    uint32_t reg_index = static_cast<uint32_t>((address & dma_reg_addr_num_mask) >> soft_reg_addr_num_shift);
+    uint32_t reg_index = static_cast<uint32_t>((address & soft_reg_addr_num_mask) >> soft_reg_addr_num_shift);
     uint32_t reg_offset = static_cast<uint32_t>(address & soft_reg_offset_mask);
 
     if (length == 8 && reg_offset != 0)
@@ -271,10 +273,60 @@ size_t CatapultDevice::write_shell_register(uint64_t address, size_t length, uin
     }
 }
 
+template<typename T> void print_register_table(RegisterMap<T>& table, const string& address_name = "address", function<uint64_t (uint64_t)> address_transform = [](uint64_t a) { return a; })
+{
+    size_t max_name_length = 0;
+
+    int value_width = sizeof(T) * 2;
+    int address_width = std::max(address_name.size(), size_t(6)); // 6 hex digits (24b)
+
+    for (const auto& r : table)
+    {
+        max_name_length = std::max(max_name_length, r.second.name.size());
+    }
+
+    cout << dec << "address_width = " << address_width << endl;
+    cout << dec << table.name() << " register map contains " << table.size() << "entries:" << endl;
+
+    cout << setw(address_width) << std::left << address_name
+         << "   "
+         << setw(max_name_length) << std::left << "name"
+         << "   "
+         << setw(value_width) << std::left << "value (hex)"
+         << "   "
+         << "protection"
+         << endl;
+
+    for (const auto& r : table)
+    {
+        cout << hex << "0x"
+             << std::right << setfill('0') << setw(6)               << hex  << address_transform(r.first)
+             <<               setfill(' ') << setw(address_width - 8)       << "   " << "   "
+             << std::left  << setfill(' ') << setw(max_name_length)         << r.second.name
+             << " = "
+             << std::right << setfill(' ') << setw(value_width)     << hex  << r.second.value
+             << "   "
+             << std::left  << setfill(' ')                          << "(r/"<< (r.second.is_readonly ? 'o' : 'w') << ")"
+             << endl;
+    }
+}
+
 void CatapultDevice::init_registers()
 {
     init_shell_registers();
     init_dma_registers();
+
+    if (options.dump_regs)
+    {
+        print_register_table(_shell_regs);
+        cout << endl;
+
+        print_register_table(
+            _dma_regs,
+            "softreg number"// ,
+            // [](uint64_t a) { return (0x800000 | (a << 3)); }
+            );
+    }
 }
 
 void CatapultDevice::init_shell_registers()
@@ -486,44 +538,44 @@ void CatapultDevice::init_shell_registers()
     _shell_regs.add(0x7F34, "shell.127.unused",            0x00000000 );
 
     // Add ASMI registers
-    _shell_regs.add(0x00A4, "asmi.000.flash_status",       0xffffffff );
-    _shell_regs.add(0x01A4, "asmi.001.rdid_status",        0xffffffff );
-    _shell_regs.add(0x02A4, "asmi.002.read_flash_address", 0xffffffff );
-    _shell_regs.add(0x03A4, "asmi.003.enable_4_byte_mode", 0xffffffff );
-    _shell_regs.add(0x04A4, "asmi.004.enable_protect",     0xffffffff );
-    _shell_regs.add(0x05A4, "asmi.005.read_4_bytes",       0xffffffff );
-    _shell_regs.add(0x06A4, "asmi.006.write_4_bytes",      0xffffffff );
-    _shell_regs.add(0x07A4, "asmi.007.page_write",         0xffffffff );
-    _shell_regs.add(0x08A4, "asmi.008.sector_erase",       0xffffffff );
-    _shell_regs.add(0x09A4, "asmi.009.write_enable",       0xffffffff );
-    _shell_regs.add(0x0AA4, "asmi.010.rsu_read_param",     0xffffffff );
-    _shell_regs.add(0x0BA4, "asmi.011.rsu_write_param",    0xffffffff );
-    _shell_regs.add(0x0CA4, "asmi.012.trigger_reconfig",   0xffffffff );
-    _shell_regs.add(0x0DA4, "asmi.013.arm_reconfig",       0xffffffff );
-    _shell_regs.add(0x0EA4, "asmi.014.asmi_fifo_level",    0xffffffff );
-    _shell_regs.add(0x0FA4, "asmi.015.asmi_major_version", 0x80000000 );
+    _shell_regs.add(0x00A4, " asmi.000.flash_status",       0xffffffff );
+    _shell_regs.add(0x01A4, " asmi.001.rdid_status",        0xffffffff );
+    _shell_regs.add(0x02A4, " asmi.002.read_flash_address", 0xffffffff );
+    _shell_regs.add(0x03A4, " asmi.003.enable_4_byte_mode", 0xffffffff );
+    _shell_regs.add(0x04A4, " asmi.004.enable_protect",     0xffffffff );
+    _shell_regs.add(0x05A4, " asmi.005.read_4_bytes",       0xffffffff );
+    _shell_regs.add(0x06A4, " asmi.006.write_4_bytes",      0xffffffff );
+    _shell_regs.add(0x07A4, " asmi.007.page_write",         0xffffffff );
+    _shell_regs.add(0x08A4, " asmi.008.sector_erase",       0xffffffff );
+    _shell_regs.add(0x09A4, " asmi.009.write_enable",       0xffffffff );
+    _shell_regs.add(0x0AA4, " asmi.010.rsu_read_param",     0xffffffff );
+    _shell_regs.add(0x0BA4, " asmi.011.rsu_write_param",    0xffffffff );
+    _shell_regs.add(0x0CA4, " asmi.012.trigger_reconfig",   0xffffffff );
+    _shell_regs.add(0x0DA4, " asmi.013.arm_reconfig",       0xffffffff );
+    _shell_regs.add(0x0EA4, " asmi.014.asmi_fifo_level",    0xffffffff );
+    _shell_regs.add(0x0FA4, " asmi.015.asmi_major_version", 0x80000000 );
 
-    _shell_regs.add(0x10A4, "asmi.016.asmi_key",           0xffffffff );
-    _shell_regs.add(0x11A4, "asmi.017.asmi_status",        0xffffffff );
-    _shell_regs.add(0x12A4, "asmi.018.asmi_control",       0xffffffff );
-    _shell_regs.add(0x13A4, "asmi.019.asmi_fifo_status",   0xffffffff );
-    _shell_regs.add(0x14A4, "asmi.020.asmi_burst_sector",  0xffffffff );
-    _shell_regs.add(0x15A4, "asmi.021.asmi_feature_enable",0xffffffff );
-    _shell_regs.add(0x16A4, "asmi.022.asmi_rsu_status",    0xffffffff );
-    _shell_regs.add(0x17A4, "asmi.023.asmi_rsu_ready",     0xffffffff );
-    _shell_regs.add(0x18A4, "asmi.024.flash_slot_count",   0xffffffff );
-    _shell_regs.add(0x19A4, "asmi.025.flash_slot_size0",   0xffffffff );
-    _shell_regs.add(0x1AA4, "asmi.026.flash_slot_size1",   0xffffffff );
-    _shell_regs.add(0x1BA4, "asmi.027.flash_slot_addr0",   0xffffffff );
-    _shell_regs.add(0x1CA4, "asmi.028.flash_slot_addr1",   0xffffffff );
-    _shell_regs.add(0x1DA4, "asmi.029.flash_slot_type",    0xffffffff );
-    _shell_regs.add(0x1EA4, "asmi.030.flash_total_size0",  0x80000000 );
-    _shell_regs.add(0x1FA4, "asmi.031.flash_total_size1",  0x80000000 );
+    _shell_regs.add(0x10A4, " asmi.016.asmi_key",           0xffffffff );
+    _shell_regs.add(0x11A4, " asmi.017.asmi_status",        0xffffffff );
+    _shell_regs.add(0x12A4, " asmi.018.asmi_control",       0xffffffff );
+    _shell_regs.add(0x13A4, " asmi.019.asmi_fifo_status",   0xffffffff );
+    _shell_regs.add(0x14A4, " asmi.020.asmi_burst_sector",  0xffffffff );
+    _shell_regs.add(0x15A4, " asmi.021.asmi_feature_enable",0xffffffff );
+    _shell_regs.add(0x16A4, " asmi.022.asmi_rsu_status",    0xffffffff );
+    _shell_regs.add(0x17A4, " asmi.023.asmi_rsu_ready",     0xffffffff );
+    _shell_regs.add(0x18A4, " asmi.024.flash_slot_count",   0xffffffff );
+    _shell_regs.add(0x19A4, " asmi.025.flash_slot_size0",   0xffffffff );
+    _shell_regs.add(0x1AA4, " asmi.026.flash_slot_size1",   0xffffffff );
+    _shell_regs.add(0x1BA4, " asmi.027.flash_slot_addr0",   0xffffffff );
+    _shell_regs.add(0x1CA4, " asmi.028.flash_slot_addr1",   0xffffffff );
+    _shell_regs.add(0x1DA4, " asmi.029.flash_slot_type",    0xffffffff );
+    _shell_regs.add(0x1EA4, " asmi.030.flash_total_size0",  0x80000000 );
+    _shell_regs.add(0x1FA4, " asmi.031.flash_total_size1",  0x80000000 );
 
     // add legacy, undocumented registers
-    _shell_regs.add(0x04f4, "legacy.dma_buffer_size",      MIN_FPGA_BUFFER_SIZE);
-    _shell_regs.add(0x05f4, "legacy.dma_num_slots",        MIN_FPGA_NUM_SLOTS);
-    _shell_regs.add(0x06f4, "legacy.num_gp_regs",          MAX_FPGA_NUM_SHELL_REG);
+    _shell_regs.add(0x04f4, "cmpat.004.dma_buffer_size",      MIN_FPGA_BUFFER_SIZE);
+    _shell_regs.add(0x05f4, "cmpat.005.dma_num_slots",        MIN_FPGA_NUM_SLOTS);
+    _shell_regs.add(0x06f4, "cmpat.006.num_gp_regs",          MAX_FPGA_NUM_SHELL_REG);
 
     // add the 32 SOFT_REG_CAPABILITY registers, filled with the 64b
     // soft-reg magic number.
@@ -533,7 +585,7 @@ void CatapultDevice::init_shell_registers()
         ostringstream name;
         uint64_t addr;
 
-        name << "srcap.magic_number" << dec << setw(2) << setfill('0') << i;
+        name << "srcap." << setfill('0') << setw(3) << i << ".magic_number" << dec << setw(2) << setfill('0') << i;
 
         addr = (i << 8) | (INTER_ADDR_SOFT_REG_CAPABILITY << 4) | 4;
 
@@ -604,39 +656,44 @@ void CatapultDevice::init_dma_registers()
     _dma_regs.add(0x20023, "dma.023.any_avail_slot_ctrl",                0 );
     _dma_regs.add(0x20024, "dma.024.any_avail_slot_test",                0 );
 
-    const char* address_types[3] = {"input", "output", "ctrl"};
-    const char* doorbell_types[2] = {"full", "done"};
-
-    ostringstream name;
-
-    name.clear();
+    array<const char*, 3> address_types = {"input", "output", "ctrl"};
+    array<const char*, 2> doorbell_types = {"full", "done"};
 
     // add all the address registers.
 
-    for (uint8_t type_index = 0; type_index < 3; type_index += 1)
+    for (unsigned int slot_index = 0; slot_index < 128; slot_index += 1)
     {
-        uint64_t a = 0x20200 | type_index;
-
-        for (uint8_t slot_index = 0; slot_index < 128; slot_index += 1)
+        for (unsigned int type_index = 0; type_index < address_types.size(); type_index += 1)
         {
-            a |= slot_index << 2;
+            ostringstream name;
 
-            name.clear();
-            name << "dma.addr_" << address_types[type_index] << setw(3) << setfill('0') << std::dec << slot_index;
+            uint64_t a = 0x20200 | (slot_index << 2) | type_index;
+
+            name << "dma."
+                 << dec << setw(3) << setfill('0') << _dma_regs.size()
+                 << ".addr_" << address_types[type_index]
+                 << "_slot"
+                 << dec << setw(3) << setfill('0') << slot_index;
+
             _dma_regs.add(a, name.str().c_str(), 0);
         }
     }
 
     // add all the doorbell registers
-    for (uint8_t type_index = 0; type_index < 1; type_index += 1)
+    for (unsigned int slot_index = 0; slot_index < 128; slot_index += 1)
     {
-        uint64_t a = 0x30000 | type_index;
-
-        for (uint8_t slot_index = 0; slot_index < 128; slot_index += 1)
+        for (unsigned int type_index = 0; type_index < doorbell_types.size(); type_index += 1)
         {
-            a |= slot_index << 9;
-            name.clear();
-            name << "dma.doorbell_" << doorbell_types[type_index] << setw(3) << setfill('0') << std::dec << slot_index;
+            uint64_t a = 0x30000 | (slot_index << 9) | type_index;
+
+            ostringstream name;
+
+            name << "dma."
+                 << dec << setw(3) << setfill('0') << _dma_regs.size()
+                 << ".doorbell_" << doorbell_types[type_index]
+                 << "_slot"
+                 << dec << setw(3) << setfill('0') << slot_index;
+
             _dma_regs.add(a, name.str().c_str(), 0);
         }
     }
@@ -686,7 +743,7 @@ CatapultDevice::CatapultRegisterType CatapultDevice::get_address_type(uint64_t a
 uint64_t CatapultDevice::read_dma_register(uint32_t index, uint32_t offset, size_t size)
 {
     cout << "CatapultDevice: rmap " << "dma  " << "  read #"
-            << showbase << setw(6) << setfill('0') << hex << index << " ";
+            << setw(6) << setfill('0') << hex << index << " ";
 
     RegisterMap<uint64_t>::Register* reg = _dma_regs.find_register(index);
 

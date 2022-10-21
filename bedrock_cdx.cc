@@ -167,7 +167,8 @@ void usage(const char* program_name)
 {
 	cout << program_name << " socket-path [sync-quantum-ns] [--] [options]" << endl;
 	cout << "options include:" << endl;
-	cout << "  --slots - enables slots DMA engine" << endl;
+	cout << "  --slots 	   - enables slots DMA engine" << endl;
+	cout << "  --printregs - dumps catapult register banks before running" << endl;
 }
 
 int sc_main(int argc, char* argv[])
@@ -242,6 +243,11 @@ int sc_main(int argc, char* argv[])
 		if (strcasecmp("slots", arg) == 0) {
 			cout << "catapult: enabling slots" << endl;
 			catapult_opts.enable_slots_dma = true;
+		}
+
+		if (strcasecmp("printregs", arg) == 0) {
+			cout << "catapult: dumping registers after initialization" << endl;
+			catapult_opts.dump_regs = true;
 		}
 	}
 

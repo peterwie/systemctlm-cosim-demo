@@ -64,6 +64,7 @@ namespace Catapult
     struct CatapultDeviceOptions
     {
         bool enable_slots_dma = false;
+        bool dump_regs = false;
     };
 
     class CatapultDevice : public sc_core::sc_module

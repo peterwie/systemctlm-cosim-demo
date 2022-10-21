@@ -66,6 +66,10 @@ namespace Catapult
         typedef function<ReadFn>  ReadFnObj;
         typedef function<WriteFn> WriteFnObj;
 
+        typedef typename map<uint64_t, Register>::const_iterator const_iterator;
+        typedef typename map<uint64_t, Register>::iterator iterator;
+        typedef typename map<uint64_t, Register>::value_type value_type;
+
         const class WriteableRegisterT { const uint32_t _dummy = 0; } WriteableRegister;
 
         // a register pair provides both access methods and storage for a register.
@@ -165,7 +169,14 @@ namespace Catapult
     public:
 
         size_t size() const { return _map.size(); }
-        bool test(uint64_t address) { return _map.count(address) > 0; }
+        bool test(uint64_t address) const { return _map.count(address) > 0; }
+
+        iterator begin()        { return _map.begin();  }
+        iterator end()          { return _map.end();    }
+        const_iterator cbegin() const { return _map.cbegin(); }
+        const_iterator cend()   const { return _map.cend();   }
+
+        const string& name() const { return _name; }
 
         Register& add(uint64_t address, const char* name, R value)
         {
