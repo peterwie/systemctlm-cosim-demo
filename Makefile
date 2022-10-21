@@ -329,6 +329,7 @@ all: $(TARGETS)
 -include $(PCIE_ACC_MD5SUM_VFIO_OBJS:.o=.d)
 -include $(VERSAL_CPM4_QDMA_DEMO_OBJS:.o=.d)
 -include $(VERSAL_CPM5_QDMA_DEMO_OBJS:.o=.d)
+-include $(BEDROCK_CDX_OBJS:.o=.d)
 CFLAGS += -MMD
 CXXFLAGS += -MMD
 
