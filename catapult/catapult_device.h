@@ -33,6 +33,8 @@
 
 #include <map>
 #include <functional>
+#include <iomanip>
+#include <ostream>
 #include <utility>
 
 #include "systemc.h"
@@ -190,5 +192,119 @@ namespace Catapult
         return o;
     }
 
+    struct out_write64b
+    {
+        const uint64_t value;
+        const size_t  length;
+        const size_t  offset;
 
+        char fill = '0';
+        char blank = 'x';
+
+        out_write64b(uint64_t v, size_t l, size_t o) : value(v), length(l), offset(o)
+        {
+            assert((length == sizeof(uint64_t) && offset == 0) ||
+                   (length == sizeof(uint32_t) && (offset == 0 || offset == sizeof(uint32_t))));
+        }
+    };
+
+    struct out_read64b
+    {
+        const uint64_t value;
+        const size_t  length;
+        const size_t  offset;
+
+        char fill = '0';
+        char blank = 'x';
+
+        out_read64b(uint64_t v, size_t l, size_t o) : value(v), length(l), offset(o)
+        {
+            assert((length == sizeof(uint64_t) && offset == 0) ||
+                   (length == sizeof(uint32_t) && (offset == 0 || offset == sizeof(uint32_t))));
+        }
+    };
+
+    inline std::ostream& operator<<(std::ostream& o, const out_write64b& wb)
+    {
+        using namespace std;
+
+        auto old_width = o.width(wb.length * 2);
+        auto old_fill  = o.fill(wb.fill);
+        auto old_fmt   = o.flags(ios::hex | ios::right);
+
+        char blanks[9] = {0};
+
+        if (wb.length == sizeof(uint64_t))
+        {
+            o << wb.value;
+            return o;
+        }
+
+        for (int i = 0; i < 8; i += 1)
+        {
+            blanks[i] = wb.blank;
+        }
+
+        uint32_t v32 = uint32_t((wb.value >> (wb.offset * 8)) & 0xfffffffful);
+
+        if (wb.offset == 0)
+        {
+            o << blanks;
+        }
+
+        o << setw(8) << v32;
+
+        if (wb.offset == 4)
+        {
+            o << blanks;
+        }
+
+        o.flags(old_fmt);
+        o.fill(old_fill);
+        o.width(old_width);
+
+        return o;
+    }
+
+    inline std::ostream& operator<<(std::ostream& o, const out_read64b& wb)
+    {
+        using namespace std;
+
+        auto old_width = o.width(wb.length * 2);
+        auto old_fill  = o.fill(wb.fill);
+        auto old_fmt   = o.flags(ios::hex | ios::right);
+
+        char blanks[9] = {0};
+
+        if (wb.length == sizeof(uint64_t))
+        {
+            o << wb.value;
+            return o;
+        }
+
+        for (int i = 0; i < 8; i += 1)
+        {
+            blanks[i] = wb.blank;
+        }
+
+        uint32_t v32 = uint32_t(wb.value & 0xfffffffful);
+
+        if (wb.offset == 0)
+        {
+            o << blanks;
+        }
+
+        o << setw(8) << v32;
+
+        if (wb.offset == 4)
+        {
+            o << blanks;
+        }
+
+        o.flags(old_fmt);
+        o.fill(old_fill);
+        o.width(old_width);
+
+        return o;
+    }
 }

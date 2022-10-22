@@ -44,6 +44,7 @@ const char* tlm_commands[] = {
     "ignore",
 };
 
+
 CatapultDevice::CatapultDevice(sc_core::sc_module_name name, const CatapultDeviceOptions& opts) :
     sc_module(name),
     target_socket("target-socket"),
@@ -202,7 +203,7 @@ size_t CatapultDevice::read_soft_register(uint64_t address, size_t length, uint6
         string message;
         cout << "CatapultDevice: r " << std::hex << setw(6) << address << " dma register " << hex << setw(6) << reg_index << " offset " << reg_offset << " => ";
         value = read_dma_register(reg_index, reg_offset, length, message);
-        cout << hex << setw(16) << setfill('.') << value << setfill(' ')
+        cout << out_read64b(value, length, reg_offset)
              << " [" << message << "]" << endl;
 
         return true;
@@ -231,24 +232,25 @@ size_t CatapultDevice::write_soft_register(uint64_t address, size_t length, uint
     else // regtype is DMA
     {
         cout << "CatapultDevice: w " << std::hex << setw(6) << address << " dma register " << hex << setw(6) << reg_index << " offset " << reg_offset << " <= ";
-        if (length == sizeof(uint64_t))
-        {
-            cout << hex << setw(16) << setfill('.') << value << setfill(' ') << endl;
-        }
-    else
-    {
-            if (reg_offset == 0)
-            {
-                cout << "xxxxxxxx";
-            }
+        // if (length == sizeof(uint64_t))
+        // {
+        //     cout << hex << setw(16) << setfill('.') << value << setfill(' ') << endl;
+        // }
+        // else
+        // {
+        //     // if (reg_offset == 0)
+        //     // {
+        //     //     cout << "xxxxxxxx";
+        //     // }
 
-            cout << hex << setw(8) << setfill('0') << uint32_t((value >> (reg_offset * 8)) & UINT32_MAX);
+        //     // cout << hex << setw(8) << setfill('0') << uint32_t((value >> (reg_offset * 8)) & UINT32_MAX);
 
-            if (reg_offset == 8)
-            {
-                cout << "xxxxxxxx";
-            }
-        }
+        //     // if (reg_offset == 8)
+        //     // {
+        //     //     cout << "xxxxxxxx";
+        //     // }
+        // }
+        cout << out_write64b(value, length, reg_offset);
 
         string message;
         write_dma_register(reg_index, reg_offset, length, value, message);
