@@ -130,6 +130,17 @@ namespace Catapult
                 return;
             }
 
+            Register(Register&& r)
+            {
+                name = std::move(r.name);
+                is_readonly = r.is_readonly;
+                value = std::move(r.value);
+                readfn = std::move(r.readfn);
+                writefn = std::move(r.writefn);
+            }
+
+            size_t name_width() const { return name.size(); }
+
             bool read(uint64_t address, R& output_value)
             {
                 if (readfn)
@@ -166,10 +177,26 @@ namespace Catapult
         // Simple register reads ... map contains a static 32b value for the register.
         map<uint64_t, Register> _map;
 
+        // the maximum width of any of the register names.  use to format output so that
+        // the arrows for reads and writes line-up regardless of name length.
+        size_t _max_name_width = 0;
+
+        Register& add_register(uint64_t address, Register&& r)
+        {
+            _max_name_width = std::max(_max_name_width, r.name_width());
+
+            assert(_map.count(address) == 0);
+            pair<RegisterMap::iterator, bool> i = _map.emplace(address, std::move(r));
+
+            return i.first->second;
+        }
+
     public:
 
         size_t size() const { return _map.size(); }
         bool test(uint64_t address) const { return _map.count(address) > 0; }
+
+        size_t max_name_width() { return _max_name_width; }
 
         iterator begin()        { return _map.begin();  }
         iterator end()          { return _map.end();    }
@@ -178,14 +205,18 @@ namespace Catapult
 
         const string& name() const { return _name; }
 
+
         Register& add(uint64_t address, const char* name, R value)
         {
-            return _map[address] = Register(name, value);
+            return add_register(address, Register(name, value));
+            // return _map[address] = Register(name, value);
         }
 
         Register& add(uint64_t address, const char* name, const ReadFnObj& rfn)
         {
-            return _map[address] = Register(name, rfn);
+            return add_register(address, Register(name, rfn));
+            // assert(_map.count(address) == 0);
+            // return _map[address] = Register(name, rfn);
         }
 
         bool read_register(uint64_t address, size_t read_size, R& value)
@@ -196,7 +227,7 @@ namespace Catapult
             // if we did not find any match, return false.
             if (reg == _map.end())
             {
-                cout << "CatapultDevice: registermap " << _name << " " << showbase << hex << address << " not found in map" << endl;
+                cout << "CatapultDevice: registermap " << _name << " " << hex << address << " not found in map" << endl;
                 return false;
             }
 
@@ -205,12 +236,12 @@ namespace Catapult
             bool result = reg->second.read(address, value);
 
             cout << "CatapultDevice: rmap " << _name << "  read "
-                 << showbase << setw(6) << setfill('0') << hex << address
-                 << " (" << reg->second.name << ") => ";
+                 << setw(6) << setfill('0') << hex << address << " ("
+                 << setw(_max_name_width) << setfill(' ') << right << reg->second.name << ") => ";
 
             if (result)
             {
-                cout << showbase << hex << value;
+                cout << hex << value;
             }
             else
             {
@@ -243,7 +274,7 @@ namespace Catapult
 
             if (reg == _map.end())
             {
-                cout << "CatapultDevice: registermap " << _name << " " << showbase << hex << address << " not found in map" << endl;
+                cout << "CatapultDevice: registermap " << _name << " " << hex << address << " not found in map" << endl;
                 return false;
             }
 
@@ -251,9 +282,9 @@ namespace Catapult
             bool result = reg->second.write(address, value);
 
             cout << "CatapultDevice: rmap " << _name << " write "
-                << showbase << setw(6) << setfill('0') << hex << address
-                << " (" << reg->second.name << ") <= "
-                << showbase << hex << value
+                << setw(6) << setfill('0') << hex << address
+                << " (" << setw(_max_name_width) << setfill(' ') << right << reg->second.name << ") <= "
+                << hex << value
                 << (result ? " ok " : " err")
                 << endl;
 

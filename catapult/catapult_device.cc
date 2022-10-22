@@ -90,8 +90,8 @@ void CatapultDevice::b_transport(tlm::tlm_generic_payload& trans,
 
     auto reg_type = get_address_type(addr);
 
-    size_t (CatapultDevice::* read_fn)(uint64_t, size_t, uint64_t&) =  &CatapultDevice::read_unimplemented_register;
-    size_t (CatapultDevice::* write_fn)(uint64_t, size_t, uint64_t) = &CatapultDevice::write_unimplemented_register;
+    auto read_fn = &CatapultDevice::read_unimplemented_register;
+    auto write_fn = &CatapultDevice::write_unimplemented_register;
 
     switch (reg_type)
     {
@@ -149,20 +149,19 @@ void CatapultDevice::b_transport(tlm::tlm_generic_payload& trans,
         memcpy(reinterpret_cast<void *>(&value),
                reinterpret_cast<void*>(data),
                min(len, sizeof(value)));
-        size_t bytes_written = (this->*write_fn)(addr, len, value);
-        log_inbound() << " - write (type " << reg_type << ") completed with length " << bytes_written << " and value " << std::hex << value << endl;
+        (this->*write_fn)(addr, len, value);
     }
 }
 
 size_t CatapultDevice::read_external_register(uint64_t address, size_t length, uint64_t& value)
 {
-    cout << "CatapultDevice: read " << std::showbase << std::hex << address << " past end of valid registers" << endl;
+    cout << "CatapultDevice: read " << std::hex << address << " past end of valid registers" << endl;
     return 0;
 }
 
 size_t CatapultDevice::write_external_register(uint64_t address, size_t, uint64_t)
 {
-    cout << "CatapultDevice: write " << std::showbase << std::hex << address << " past end of valid registers" << endl;
+    cout << "CatapultDevice: write " << std::hex << address << " past end of valid registers" << endl;
     return 0;
 }
 
@@ -187,7 +186,7 @@ size_t CatapultDevice::read_soft_register(uint64_t address, size_t length, uint6
 
     if (length == 8 && reg_offset != 0)
     {
-        cout << "Invalid 8b soft register read with offset (" << showbase << hex << address << ")" << endl;
+        cout << "Invalid 8b soft register read with offset (" << address << ")" << endl;
         value = 0xbaadf00dbaadf00d;
         return 0;
     }
@@ -195,15 +194,16 @@ size_t CatapultDevice::read_soft_register(uint64_t address, size_t length, uint6
     if (reg_type == soft || options.enable_slots_dma == false)
     {
         value = ((uint64_t) reg_index << 32) |  reg_index;
-        cout << "CatapultDevice: read 0x" << std::hex << address << " softshell register 0x" << hex << reg_index << endl;
+        cout << "CatapultDevice: r " << std::hex << address << " softshell register 0x" << hex << reg_index << endl;
         return sizeof(uint64_t);
     }
     else // regtype is DMA
     {
-        cout << "CatapultDevice: read 0x" << std::hex << address << " dma register 0x" << hex << reg_index << " offset " << reg_offset << endl;
-        value = read_dma_register(reg_index, reg_offset, length);
-
-        cout << "CatapultDevice: read 0x" << std::hex << address << " DMA register 0x" << hex << reg_index << endl;
+        string message;
+        cout << "CatapultDevice: r " << std::hex << setw(6) << address << " dma register " << hex << setw(6) << reg_index << " offset " << reg_offset << " => ";
+        value = read_dma_register(reg_index, reg_offset, length, message);
+        cout << hex << setw(16) << setfill('.') << value << setfill(' ')
+             << " [" << message << "]" << endl;
 
         return true;
     }
@@ -217,7 +217,7 @@ size_t CatapultDevice::write_soft_register(uint64_t address, size_t length, uint
 
     if (length == 8 && reg_offset != 0)
     {
-        cout << "Invalid 8b soft register write with offset (" << showbase << hex << address << ")" << endl;
+        cout << "Invalid 8b soft register write with offset (" << hex << address << ")" << endl;
         return 0;
     }
 
@@ -228,13 +228,35 @@ size_t CatapultDevice::write_soft_register(uint64_t address, size_t length, uint
             << " register 0x"
             << hex << address << endl;
     }
+    else // regtype is DMA
+    {
+        cout << "CatapultDevice: w " << std::hex << setw(6) << address << " dma register " << hex << setw(6) << reg_index << " offset " << reg_offset << " <= ";
+        if (length == sizeof(uint64_t))
+        {
+            cout << hex << setw(16) << setfill('.') << value << setfill(' ') << endl;
+        }
     else
     {
-        cout << "CatapultDevice: write 0x" << std::hex << address << " DMA register 0x" << hex << reg_index << " value 0x" << hex << value << endl;
-        write_dma_register(reg_index, reg_offset, length, value);
+            if (reg_offset == 0)
+            {
+                cout << "xxxxxxxx";
+            }
+
+            cout << hex << setw(8) << setfill('0') << uint32_t((value >> (reg_offset * 8)) & UINT32_MAX);
+
+            if (reg_offset == 8)
+            {
+                cout << "xxxxxxxx";
+            }
+        }
+
+        string message;
+        write_dma_register(reg_index, reg_offset, length, value, message);
+
+        cout << " [" << message << "]" << endl;
     }
 
-    return 0;
+    return length;
 }
 
 size_t CatapultDevice::read_shell_register(uint64_t address, size_t length, uint64_t& value)
@@ -740,11 +762,8 @@ CatapultDevice::CatapultRegisterType CatapultDevice::get_address_type(uint64_t a
     }
 }
 
-uint64_t CatapultDevice::read_dma_register(uint32_t index, uint32_t offset, size_t size)
+uint64_t CatapultDevice::read_dma_register(uint32_t index, uint32_t offset, size_t size, string& message)
 {
-    cout << "CatapultDevice: rmap " << "dma  " << "  read #"
-            << setw(6) << setfill('0') << hex << index << " ";
-
     RegisterMap<uint64_t>::Register* reg = _dma_regs.find_register(index);
 
     assert((size == 8 && offset == 0) ||
@@ -752,37 +771,45 @@ uint64_t CatapultDevice::read_dma_register(uint32_t index, uint32_t offset, size
 
     if (reg == nullptr)
     {
-        cout << "not implmemented" << endl;
+        message = "NOT IMPLEMENTED";
         return 0;
     }
-
-    cout << "(" << reg->name << ") => ";
 
     uint64_t value64 = 0;
 
     if (reg->read(index, value64) == 0)
     {
-        cout << "no data returned" << endl;
+        message = "READ FAILED";
         return 0;
+    }
+
+        uint64_t v = (value64 >> (offset * 8)) & (size == 8 ? UINT64_MAX : UINT32_MAX);
+
+    message = "OK";
+    return v;
+}
+
+void CatapultDevice::write_dma_register(uint32_t index, uint32_t offset, size_t size, uint64_t value, string& message)
+{
+    RegisterMap<uint64_t>::Register* reg = _dma_regs.find_register(index);
+
+    assert((size == 8 && offset == 0) ||
+           (size == 4 && (offset == 0 || offset == 4)));
+
+    if (reg == nullptr)
+        {
+        message = "NOT IMPLEMENTED";
+        return;
+        }
+
+    uint64_t value64 = 0;
+
+    if (reg->write(index, value64) == 0)
+    {
+        message = "WRITE DROPPED";
     }
     else
     {
-        uint64_t v = (value64 >> (offset * 8)) & (size == 8 ? UINT64_MAX : UINT32_MAX);
-
-        cout << hex << setw(16) << setfill('0') << value64;
-
-        if (size == 4)
-        {
-            cout << " (" << hex << setw(size) << setfill('0') << uint32_t(v) << ")";
-        }
-
-        cout << endl;
-
-        return v;
-    }
+        message = "OK";
 }
-
-void CatapultDevice::write_dma_register(uint32_t index, uint32_t offset, size_t size, uint64_t value)
-{
-    return;
 }

@@ -163,8 +163,8 @@ namespace Catapult
         size_t write_unimplemented_register(uint64_t address, size_t size, uint64_t value);
 
         // methods for reading and writing the slot DMA registers, if slots is enabled.
-        uint64_t read_dma_register(uint32_t index, uint32_t offset, size_t size);
-        void write_dma_register(uint32_t index, uint32_t offset, size_t size, uint64_t value);
+        uint64_t read_dma_register(uint32_t index, uint32_t offset, size_t size, string& out_message);
+        void write_dma_register(uint32_t index, uint32_t offset, size_t size, uint64_t value, std::string& out_message);
 
         // uses the simulation time to generate a 64b 100MHz counter and returns
         // either the low 32b or the high 32b (depending on low_part)
