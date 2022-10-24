@@ -60,6 +60,7 @@ typedef uint64_t ULONGLONG;
 #include "CatapultShellInterface.h"
 
 #include "register_map.hpp"
+#include "slots_dma.h"
 
 namespace Catapult
 {
@@ -95,8 +96,6 @@ namespace Catapult
         static const uint64_t mmio_size              = core_address_valid_mask + 1;
 
         static const uint64_t mmio_bad_value         = 0xdeadbeefdeadbeef;
-
-        static const uint64_t slots_magic_number     = SOFT_REG_MAPPING_SLOT_DMA_MAGIC_VALUE;
 
         // register type enum, as an encoded 16b value.
         // the top 4b are 0 if bits [63:24] of the address are 0, and 0001 otherwise
@@ -134,13 +133,11 @@ namespace Catapult
         // A register map for shell/legacy regs
         RegisterMap<uint32_t> _shell_regs;
 
-        // And a register map for DMA registers
-        RegisterMap<uint64_t> _dma_regs;
+        SlotsEngine _slots_engine;
 
         void init_registers(void);
 
         void init_shell_registers(void);
-        void init_dma_registers(void);
 
         virtual void b_transport(tlm::tlm_generic_payload& trans, sc_time& delay);
 
@@ -163,10 +160,6 @@ namespace Catapult
 
         size_t  read_unimplemented_register(uint64_t address, size_t size, uint64_t& value);
         size_t write_unimplemented_register(uint64_t address, size_t size, uint64_t value);
-
-        // methods for reading and writing the slot DMA registers, if slots is enabled.
-        uint64_t read_dma_register(uint32_t index, uint32_t offset, size_t size, string& out_message);
-        void write_dma_register(uint32_t index, uint32_t offset, size_t size, uint64_t value, std::string& out_message);
 
         // uses the simulation time to generate a 64b 100MHz counter and returns
         // either the low 32b or the high 32b (depending on low_part)

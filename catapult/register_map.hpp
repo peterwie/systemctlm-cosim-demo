@@ -181,16 +181,6 @@ namespace Catapult
         // the arrows for reads and writes line-up regardless of name length.
         size_t _max_name_width = 0;
 
-        Register& add_register(uint64_t address, Register&& r)
-        {
-            _max_name_width = std::max(_max_name_width, r.name_width());
-
-            assert(_map.count(address) == 0);
-            pair<RegisterMap::iterator, bool> i = _map.emplace(address, std::move(r));
-
-            return i.first->second;
-        }
-
     public:
 
         size_t size() const { return _map.size(); }
@@ -205,19 +195,26 @@ namespace Catapult
 
         const string& name() const { return _name; }
 
-
         Register& add(uint64_t address, const char* name, R value)
         {
             return add_register(address, Register(name, value));
-            // return _map[address] = Register(name, value);
         }
 
         Register& add(uint64_t address, const char* name, const ReadFnObj& rfn)
         {
             return add_register(address, Register(name, rfn));
-            // assert(_map.count(address) == 0);
-            // return _map[address] = Register(name, rfn);
         }
+
+        Register& add_register(uint64_t address, Register&& r)
+        {
+            _max_name_width = std::max(_max_name_width, r.name_width());
+
+            assert(_map.count(address) == 0);
+            pair<RegisterMap::iterator, bool> i = _map.emplace(address, std::move(r));
+
+            return i.first->second;
+        }
+
 
         bool read_register(uint64_t address, size_t read_size, R& value)
         {
@@ -290,6 +287,45 @@ namespace Catapult
 
             return result;
         }
+
+        void print_register_table(const string& address_name = "address", function<uint64_t (uint64_t)> address_transform = [](uint64_t a) { return a; })
+        {
+            size_t max_name_length = 0;
+
+            int value_width = sizeof(R) * 2;
+            int address_width = std::max(address_name.size(), size_t(6)); // 6 hex digits (24b)
+
+            for (const auto& r : *this)
+            {
+                max_name_length = std::max(max_name_length, r.second.name.size());
+            }
+
+            cout << dec << "address_width = " << address_width << endl;
+            cout << dec << name() << " register map contains " << size() << "entries:" << endl;
+
+            cout << setw(address_width) << std::left << address_name
+                << "   "
+                << setw(max_name_length) << std::left << "name"
+                << "   "
+                << setw(value_width) << std::left << "value (hex)"
+                << "   "
+                << "protection"
+                << endl;
+
+            for (const auto& r : *this)
+            {
+                cout << hex << "0x"
+                    << std::right << setfill('0') << setw(6)               << hex  << address_transform(r.first)
+                    <<               setfill(' ') << setw(address_width - 8)       << "   " << "   "
+                    << std::left  << setfill(' ') << setw(max_name_length)         << r.second.name
+                    << " = "
+                    << std::right << setfill(' ') << setw(value_width)     << hex  << r.second.value
+                    << "   "
+                    << std::left  << setfill(' ')                          << "(r/"<< (r.second.is_readonly ? 'o' : 'w') << ")"
+                    << endl;
+            }
+        }
+
     };
 
 }
