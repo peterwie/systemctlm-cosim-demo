@@ -75,27 +75,45 @@ namespace Catapult
     class SlotsEngine
     {
     public:
+        static const uint64_t slots_magic_number    = SOFT_REG_MAPPING_SLOT_DMA_MAGIC_VALUE;
+        static const unsigned int maximum_slot_count= 64;
 
-        static const uint64_t slots_magic_number     = SOFT_REG_MAPPING_SLOT_DMA_MAGIC_VALUE;
+        typedef RegisterMap<uint64_t>::Register RegisterT;
+
+        enum DoorbellType { full = 0, done = 1 };
 
     private:
+        // The number of slots the engine is running
+        unsigned int _slot_count = maximum_slot_count;
+
         // And a register map for DMA registers
         RegisterMap<uint64_t> _dma_regs;
 
         void init_dma_registers(void);
 
+        bool write_doorbell_register(RegisterT* reg,
+                                     unsigned int slot_number,
+                                     DoorbellType type,
+                                     uint64_t new_value);
+
     public:
 
-        SlotsEngine() : _dma_regs("dma")
+        SlotsEngine(unsigned int slot_count) : _slot_count(slot_count),
+                                               _dma_regs("dma")
         {
+            if (slot_count > maximum_slot_count)
+            {
+                throw logic_error("slot_count is larger than maximum allowed value (64)");
+            }
+
             init_dma_registers();
         }
 
         void rst(void);
 
         // methods for reading and writing the slot DMA registers, if slots is enabled.
-        uint64_t read_dma_register(uint32_t index, uint32_t offset, size_t size, string& out_message);
-        void write_dma_register(uint32_t index, uint32_t offset, size_t size, uint64_t value, std::string& out_message);
+        uint64_t read_dma_register(uint32_t index, string& out_message);
+        void write_dma_register(uint32_t index, uint64_t value, std::string& out_message);
 
         void print();
     };

@@ -1,5 +1,6 @@
 {
     "files.associations": {
+        "*.inc": "makefile",
         "*.h": "cpp",
         "iomanip": "cpp",
         "systemc": "cpp",
@@ -36,6 +37,7 @@
         "thread": "cpp",
         "utility": "cpp",
         "atomic": "cpp",
-        "bit": "cpp"
+        "bit": "cpp",
+        "sstream": "cpp"
     }
 }

@@ -59,7 +59,10 @@ typedef uint64_t ULONGLONG;
 #define DEFINE_GUID(...)   /* do nothing */
 #include "CatapultShellInterface.h"
 
+#include "manipulators.hpp"
+
 #include "register_map.hpp"
+#include "register_adapter.hpp"
 #include "slots_dma.h"
 
 namespace Catapult
@@ -133,6 +136,19 @@ namespace Catapult
         // A register map for shell/legacy regs
         RegisterMap<uint32_t> _shell_regs;
 
+        // A 32b-64b adapter for soft register writes
+        // When a 32b write comes to offset 0 of a 64b soft register, the address and
+        // data are stored in the two fields.  The next write should be a 32b write
+        // at a 4B offset.  If that address is write_address + 4, then this composes
+        // and commits a 64b write and commits it to the specified softreg.
+        // If it's a write to any other address, this prints an error and discards
+        // the previous 32b write.
+
+        RegisterWidthAdapter<
+            std::function<bool (uint64_t, uint64_t&)>,
+            std::function<bool (uint64_t, uint64_t)>
+            > _softreg_width_adapter;
+
         SlotsEngine _slots_engine;
 
         void init_registers(void);
@@ -148,9 +164,11 @@ namespace Catapult
         size_t write_shell_register(uint64_t address, size_t size, uint64_t value);
 
         // reads a 64b soft register in the soft register range.  Unimplemented softregs return -1
-        // this includes any potential DMA registers.
-        size_t    read_soft_register(uint64_t address, size_t size, uint64_t& value);
-        size_t   write_soft_register(uint64_t address, size_t size, uint64_t  value);
+        // this includes any potential DMA registers.  Note this goes through a
+        // width adapter, which takes care of converting partial 64b r/w into complete
+        // ones.
+        bool    read_soft_register(uint64_t address, uint64_t& value);
+        bool   write_soft_register(uint64_t address, uint64_t  value);
 
         // reads a register outside of the core registers.
         // returns true if the register is implemented, and stores the value to return in value
@@ -185,119 +203,4 @@ namespace Catapult
         return o;
     }
 
-    struct out_write64b
-    {
-        const uint64_t value;
-        const size_t  length;
-        const size_t  offset;
-
-        char fill = '0';
-        char blank = 'x';
-
-        out_write64b(uint64_t v, size_t l, size_t o) : value(v), length(l), offset(o)
-        {
-            assert((length == sizeof(uint64_t) && offset == 0) ||
-                   (length == sizeof(uint32_t) && (offset == 0 || offset == sizeof(uint32_t))));
-        }
-    };
-
-    struct out_read64b
-    {
-        const uint64_t value;
-        const size_t  length;
-        const size_t  offset;
-
-        char fill = '0';
-        char blank = 'x';
-
-        out_read64b(uint64_t v, size_t l, size_t o) : value(v), length(l), offset(o)
-        {
-            assert((length == sizeof(uint64_t) && offset == 0) ||
-                   (length == sizeof(uint32_t) && (offset == 0 || offset == sizeof(uint32_t))));
-        }
-    };
-
-    inline std::ostream& operator<<(std::ostream& o, const out_write64b& wb)
-    {
-        using namespace std;
-
-        auto old_width = o.width(wb.length * 2);
-        auto old_fill  = o.fill(wb.fill);
-        auto old_fmt   = o.flags(ios::hex | ios::right);
-
-        char blanks[9] = {0};
-
-        if (wb.length == sizeof(uint64_t))
-        {
-            o << wb.value;
-            return o;
-        }
-
-        for (int i = 0; i < 8; i += 1)
-        {
-            blanks[i] = wb.blank;
-        }
-
-        uint32_t v32 = uint32_t((wb.value >> (wb.offset * 8)) & 0xfffffffful);
-
-        if (wb.offset == 0)
-        {
-            o << blanks;
-        }
-
-        o << setw(8) << v32;
-
-        if (wb.offset == 4)
-        {
-            o << blanks;
-        }
-
-        o.flags(old_fmt);
-        o.fill(old_fill);
-        o.width(old_width);
-
-        return o;
-    }
-
-    inline std::ostream& operator<<(std::ostream& o, const out_read64b& wb)
-    {
-        using namespace std;
-
-        auto old_width = o.width(wb.length * 2);
-        auto old_fill  = o.fill(wb.fill);
-        auto old_fmt   = o.flags(ios::hex | ios::right);
-
-        char blanks[9] = {0};
-
-        if (wb.length == sizeof(uint64_t))
-        {
-            o << wb.value;
-            return o;
-        }
-
-        for (int i = 0; i < 8; i += 1)
-        {
-            blanks[i] = wb.blank;
-        }
-
-        uint32_t v32 = uint32_t(wb.value & 0xfffffffful);
-
-        if (wb.offset == 0)
-        {
-            o << blanks;
-        }
-
-        o << setw(8) << v32;
-
-        if (wb.offset == 4)
-        {
-            o << blanks;
-        }
-
-        o.flags(old_fmt);
-        o.fill(old_fill);
-        o.width(old_width);
-
-        return o;
-    }
 }

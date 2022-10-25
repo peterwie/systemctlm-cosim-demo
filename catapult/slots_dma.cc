@@ -77,7 +77,7 @@ void SlotsEngine::init_dma_registers()
     _dma_regs.add(0x1c7f0, "dma.000.magicvalue0",       slots_magic_number );
     _dma_regs.add(0x20000, "dma.000.magicvalue",        slots_magic_number );
     _dma_regs.add(0x20001, "dma.001.buffer_size",                        0 );
-    _dma_regs.add(0x20002, "dma.002.num_buffers",                       64 );
+    _dma_regs.add(0x20002, "dma.002.num_buffers",               _slot_count);
     _dma_regs.add(0x20003, "dma.003.num_gp_registers",                 128 );
     _dma_regs.add(0x20004, "dma.004.merged_slots",                       0 );
     _dma_regs.add(0x20005, "dma.005.isr_rate_limit_threshold",           0 );
@@ -138,21 +138,31 @@ void SlotsEngine::init_dma_registers()
                  << "_slot"
                  << dec << setw(3) << setfill('0') << slot_index;
 
-            auto r = decltype(_dma_regs)::Register(
-                                            name.str().c_str(),
-
+            auto r = RegisterT(
+                        name.str().c_str(),
+                        0,
+                        [](uint64_t /* address */, uint64_t& output_value, RegisterT* reg)
+                        {
+                            output_value = reg->value;
+                            return true;
+                        },
+                        [this, slot_index, type_index](uint64_t address, uint64_t new_value, RegisterT* reg)
+                        {
+                            return write_doorbell_register(reg,
+                                                           slot_index,
+                                                           DoorbellType(type_index),
+                                                           new_value);
+                        }
+                        );
 
             _dma_regs.add(a, name.str().c_str(), 0);
         }
     }
 }
 
-uint64_t SlotsEngine::read_dma_register(uint32_t index, uint32_t offset, size_t size, string& message)
+uint64_t SlotsEngine::read_dma_register(uint32_t index, string& message)
 {
     RegisterMap<uint64_t>::Register* reg = _dma_regs.find_register(index);
-
-    assert((size == 8 && offset == 0) ||
-           (size == 4 && (offset == 0 || offset == 4)));
 
     if (reg == nullptr)
     {
@@ -160,37 +170,30 @@ uint64_t SlotsEngine::read_dma_register(uint32_t index, uint32_t offset, size_t 
         return 0;
     }
 
-    uint64_t value64 = 0;
+    uint64_t value = 0;
 
-    if (reg->read(index, value64) == 0)
+    if (reg->read(index, value) == 0)
     {
         message = "READ FAILED";
         return 0;
     }
 
-        uint64_t v = (value64 >> (offset * 8)) & (size == 8 ? UINT64_MAX : UINT32_MAX);
-
     message = "OK";
-    return v;
+    return value;
 }
 
 
-void SlotsEngine::write_dma_register(uint32_t index, uint32_t offset, size_t size, uint64_t value, string& message)
+void SlotsEngine::write_dma_register(uint32_t index, uint64_t value, string& message)
 {
     RegisterMap<uint64_t>::Register* reg = _dma_regs.find_register(index);
 
-    assert((size == 8 && offset == 0) ||
-           (size == 4 && (offset == 0 || offset == 4)));
-
     if (reg == nullptr)
-        {
+    {
         message = "NOT IMPLEMENTED";
         return;
-        }
+    }
 
-    uint64_t value64 = 0;
-
-    if (reg->write(index, value64) == 0)
+    if (reg->write(index, value) == 0)
     {
         message = "WRITE DROPPED";
     }
@@ -206,4 +209,24 @@ void SlotsEngine::print()
         "softreg number"// ,
         // [](uint64_t a) { return (0x800000 | (a << 3)); }
         );
+}
+
+
+bool SlotsEngine::write_doorbell_register(RegisterT* reg,
+                                          unsigned int slot_number,
+                                          DoorbellType type,
+                                          uint64_t new_value)
+{
+    // each doorbell (full & done) has its own register
+
+    // Check if the slot is implemented.  If not then drop the write and return.
+
+    if (slot_number >= _slot_count)
+    {
+        cout << "SlotsEngine: slot " << slot_number
+             << " not implemented - dropping " << ((type == done) ? "done" : "full")
+             << " doorbell write" << endl;
+    }
+
+    return true;
 }
