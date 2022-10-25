@@ -24,7 +24,7 @@ namespace Catapult
         bool is_write_in_progress() { return _addr != UINT64_MAX; }
         bool is_next_write(uint64_t a)
         {
-            assert(is_write_in_progress() == false);
+            assert(is_write_in_progress() == true);
             return a == _addr + 4;
         }
 

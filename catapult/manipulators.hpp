@@ -158,13 +158,13 @@ namespace Catapult
     {
         using namespace std;
 
-        auto old_width = o.width(h._width);
+        auto old_width = o.width(0);
         auto old_fill  = o.fill('0');
         auto old_fmt   = o.flags(ios::hex | ios::right);
 
         if (h._show_base) { o << "0x"; }
 
-        o << h._value;
+        o << setw(h._width) << h._value;
 
         o.flags(old_fmt);
         o.fill(old_fill);
