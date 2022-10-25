@@ -98,6 +98,7 @@ namespace Catapult
             string name;
             bool is_readonly = true;
 
+            R initial_value = 0;
             R value = 0;
 
             ReadFnObj  readfn;
@@ -105,9 +106,9 @@ namespace Catapult
 
             Register()                                        { }
             Register(const char* n)                         : name(n) { }
-            Register(const char* n, R v)                    : name(n) { value = v; }
+            Register(const char* n, R iv)                   : name(n) { initial_value = value = iv; }
             Register(const char* n, WriteableRegisterT)     : name(n), is_readonly(false) { }
-            Register(const char* n, R v, WriteableRegisterT): name(n), is_readonly(false) { value = v; }
+            Register(const char* n, R iv, WriteableRegisterT):name(n), is_readonly(false) { initial_value = value = iv; }
 
             Register(const char* n, const ReadFnObj& rfn)   : name(n) { readfn = rfn; }
             Register(const char* n, const WriteFnObj& wfn)  : name(n), is_readonly(false) { writefn = wfn; }
@@ -118,13 +119,14 @@ namespace Catapult
                 writefn = wfn;
             }
 
-            Register(const char* n, R v, const ReadFnObj& rfn) : name(n), is_readonly(true) { value = v; readfn = rfn; }
+            Register(const char* n, R iv, const ReadFnObj& rfn) : name(n), is_readonly(true) { initial_value = value = iv; readfn = rfn; }
             Register(const char* n,
-                    R v,
-                    const ReadFnObj& rfn,
-                    const WriteFnObj& wfn)
+                     R iv,
+                     const ReadFnObj& rfn,
+                     const WriteFnObj& wfn)
                 : name(n), is_readonly(false)
             {
+                initial_value = value = iv;
                 readfn = rfn;
                 writefn = wfn;
                 return;
@@ -134,6 +136,7 @@ namespace Catapult
             {
                 name = std::move(r.name);
                 is_readonly = r.is_readonly;
+                initial_value = std::move(r.initial_value);
                 value = std::move(r.value);
                 readfn = std::move(r.readfn);
                 writefn = std::move(r.writefn);
@@ -167,9 +170,22 @@ namespace Catapult
 
                 return true;
             }
+
+            void reset()
+            {
+                value = initial_value;
+            }
         };
 
         RegisterMap(const string& map_name) : _name(map_name) { }
+
+        void reset(void)
+        {
+            for (auto& r : _map)
+            {
+                r.second.reset();
+            }
+        }
 
     private:
         string _name;

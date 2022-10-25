@@ -51,6 +51,7 @@ namespace Catapult
                 // write to low word of a 64b address - cache and accept the write
                 _addr = address;
                 _data = value;
+                // cout << "RegisterAdapter: lo-word write @ " << out_hex(address, 6) << " saved" << endl;
                 return 4;
             }
 
@@ -89,11 +90,14 @@ namespace Catapult
             }
             else if (is_write_in_progress() == true && is_next_write(address))
             {
+                // cout << "RegisterAdapter: hi-word write @ " << out_hex(address, 6) << " detected" << endl;
                 assert(length == 4);
                 value = (value << 32) | _data;
+                address = _addr;
                 reset();
             }
 
+            // cout << "RegisterAdapter: write " << out_hex(value, 8, true) << " @ " << out_hex(address, 6) << " posted" << endl;
             _write(address, value);
             return length;
         }

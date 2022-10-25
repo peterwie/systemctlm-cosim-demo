@@ -110,6 +110,7 @@ SC_MODULE(Top)
 		/* Pull the reset signal.  */
 		rst.write(true);
 		wait(1, SC_US);
+		catapult_dev.reset();
 		rst.write(false);
 	}
 
@@ -167,7 +168,7 @@ void usage(const char* program_name)
 {
 	cout << program_name << " socket-path [sync-quantum-ns] [--] [options]" << endl;
 	cout << "options include:" << endl;
-	cout << "  --slots 	   - enables slots DMA engine" << endl;
+	cout << "  --noslots   - disables slots DMA engine" << endl;
 	cout << "  --printregs - dumps catapult register banks before running" << endl;
 }
 
@@ -240,9 +241,9 @@ int sc_main(int argc, char* argv[])
 		// remove - and -- from the start of the argument
 		arg += (arg[1] == '-' ? 2 : 1);
 
-		if (strcasecmp("slots", arg) == 0) {
-			cout << "catapult: enabling slots" << endl;
-			catapult_opts.enable_slots_dma = true;
+		if (strcasecmp("noslots", arg) == 0) {
+			cout << "catapult: disabling slots" << endl;
+			catapult_opts.enable_slots_dma = false;
 		}
 
 		if (strcasecmp("printregs", arg) == 0) {

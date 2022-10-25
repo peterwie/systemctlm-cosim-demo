@@ -109,7 +109,7 @@ namespace Catapult
             init_dma_registers();
         }
 
-        void rst(void);
+        void reset(void);
 
         // methods for reading and writing the slot DMA registers, if slots is enabled.
         uint64_t read_dma_register(uint32_t index, string& out_message);

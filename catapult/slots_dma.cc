@@ -38,6 +38,11 @@ using namespace std;
 
 using namespace Catapult;
 
+void SlotsEngine::reset()
+{
+    _dma_regs.reset();
+}
+
 void SlotsEngine::init_dma_registers()
 {
     // DMA register addresses are pre-shifted by the soft-regsiter r/w handlers
@@ -104,7 +109,7 @@ void SlotsEngine::init_dma_registers()
 
     // add all the address registers.
 
-    for (unsigned int slot_index = 0; slot_index < 128; slot_index += 1)
+    for (unsigned int slot_index = 0; slot_index < _slot_count; slot_index += 1)
     {
         for (unsigned int type_index = 0; type_index < address_types.size(); type_index += 1)
         {
@@ -124,7 +129,7 @@ void SlotsEngine::init_dma_registers()
 
     // add all the doorbell registers, with callbacks for register
     // writes.
-    for (unsigned int slot_index = 0; slot_index < 128; slot_index += 1)
+    for (unsigned int slot_index = 0; slot_index < _slot_count; slot_index += 1)
     {
         for (unsigned int type_index = 0; type_index < doorbell_types.size(); type_index += 1)
         {

@@ -69,7 +69,7 @@ namespace Catapult
 {
     struct CatapultDeviceOptions
     {
-        bool enable_slots_dma = false;
+        bool enable_slots_dma = true;
         bool dump_regs = false;
     };
 
@@ -130,6 +130,8 @@ namespace Catapult
 
         // Constructors
         CatapultDevice(sc_core::sc_module_name name, const CatapultDeviceOptions& options);
+
+        void reset();
 
     private:
 

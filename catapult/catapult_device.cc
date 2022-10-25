@@ -64,6 +64,12 @@ CatapultDevice::CatapultDevice(sc_core::sc_module_name name, const CatapultDevic
     // SC_THREAD(do_slots_engine);
 }
 
+void CatapultDevice::reset()
+{
+    _shell_regs.reset();
+    _slots_engine.reset();
+}
+
 template<class T, typename V>
 function<size_t (uint64_t, size_t, V)> bind_reg_callback(
     T* target,
@@ -222,7 +228,7 @@ bool CatapultDevice::read_soft_register(uint64_t address, uint64_t& value)
 bool CatapultDevice::write_soft_register(uint64_t address, uint64_t value)
 {
     auto reg_type = get_address_type(address);
-    uint32_t reg_index = static_cast<uint32_t>((address & dma_reg_addr_num_mask) >> soft_reg_addr_num_shift);
+    uint32_t reg_index = static_cast<uint32_t>((address & soft_reg_addr_num_mask) >> soft_reg_addr_num_shift);
 
     if (reg_type == soft || options.enable_slots_dma == false)
     {
@@ -284,7 +290,6 @@ size_t CatapultDevice::write_shell_register(uint64_t address, size_t length, uin
 void CatapultDevice::init_registers()
 {
     init_shell_registers();
-    // init_dma_registers();
 
     if (options.dump_regs)
     {
