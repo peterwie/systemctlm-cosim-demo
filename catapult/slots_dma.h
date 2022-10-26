@@ -56,6 +56,32 @@ namespace Catapult
 
     static_assert(sizeof(DMA_ISO_CONTROL_RESULT_COMBINED) == 128, "DMA_ISO_CONTROL_RESULT_COMBINED size incorrect");
 
+    struct SlotInputConfig
+    {
+        vector<uint8_t>* buffer;
+        uint64_t valid_length = 0;
+        sc_core::sc_event* signal;
+
+        void set_data(uint64_t length)
+        {
+            valid_length = length;
+            if (signal)
+            {
+                signal->notify(SC_ZERO_TIME);
+            }
+        }
+
+        void clear()
+        {
+            if (buffer)
+            {
+                buffer.clear();
+            }
+
+            valid_length = 0;
+        }
+    };
+
     class SlotsEngine : public sc_core::sc_module
     {
         SC_HAS_PROCESS(SlotsEngine);
@@ -74,11 +100,14 @@ namespace Catapult
     private:
 
         // The number of slots the engine is running
-        unsigned int _slot_count = maximum_slot_count;
+        unsigned int _slot_count = 0;
 
         // back pointer to the catapult shell, through which the engine will initiate
         // DMA operations
         CatapultShellInterface* _shell = nullptr;
+
+        // Role input buffers for each slot
+        vector<SlotInputConfig*> _slot_config;
 
         // And a register map for DMA registers
         RegisterMap<uint64_t> _dma_regs;
@@ -137,6 +166,9 @@ namespace Catapult
         SlotsEngine(sc_module_name module_name, unsigned int slot_count, CatapultShellInterface* shell);
 
         void reset(void);
+
+        // attaches an input buffer and an event to a slot.
+        void set_slot_config(unsigned int slot_number, SlotInputConfig* config);
 
         // methods for reading and writing the slot DMA registers, if slots is enabled.
         uint64_t read_dma_register(uint32_t index, string& out_message);

@@ -328,62 +328,64 @@ void SlotsEngine::dma_thread()
         {
             uint64_t read_cb  = read_count_blocks * dma_block_size;
 
-            cout << "SlotsEngine: full db for slot " << slot_number << " detected - reading " << read_cb << "B from host" << endl;
+            cout << "SlotsEngine: full db for slot " << slot_number << " detected" << endl;
 
-            vector<uint32_t> input_data(read_cb / sizeof(uint32_t));
-
-            // uint64_t input_address   = get_address_register(slot_number, AddressType::input);
-
-            auto ian = get_address_regnum(slot_number, AddressType::input);
-            auto iar = _dma_regs.find_register(ian);
-
-            cout << "input_address register object is " << out_hex(uint64_t(iar), 16, true) << endl;
-            if (iar != nullptr)
+            if (slot_number < _slot_config.size() && 
+                _slot_config[slot_number] != nullptr)
             {
-                cout << "input_address register value is "  << out_hex(iar->value, 16, true) << endl;
+                SlotInputConfig ic = _slot_config[slot_number];
+
+                // TODO: check if read_cb is < the input buffer size
+                cout >> "SlotsEngine: slot " << slot_number << " reading " << read_cb << "B from host" << endl;
+
+                uint64_t input_address   = get_address_register(slot_number, AddressType::input);
+
+                assert(input_address != 0);
+
+                uint64_t control_address = get_address_register(slot_number, AddressType::control);
+
+                // start a DMA transaction
+                _shell->dma_read_from_host(input_address,  ic->buffer->data(), read_cb);
+                wait(SC_ZERO_TIME);
+
+                // clear the doorbell register.
+                cout << "SlotsEngine: clearing slot << " << slot_number << " full db" << endl;
+                get_doorbell_register(slot_number, full) = 0;
+
+                // clear the full bit in the control register
+                cout << "SlotsEngine: clearing slot " << slot_number << " full control bit" << endl;
+                uint64_t zero;
+                _shell->dma_write_to_host(&zero,
+                                        get_control_full_status_address(control_address),
+                                        sizeof(zero));
+                wait(SC_ZERO_TIME);
+
+                // Dump the output buffer
+                // const size_t line_dwords = 8;
+
+                // for (size_t dwi = 0; dwi < input_data.size(); dwi += line_dwords)
+                // {
+                //     if (dwi % line_dwords == 0)
+                //     {
+                //         cout << out_hex(dwi * 4, 8) << ": ";
+                //     }
+
+                //     for (size_t dwj = dwi; dwj < (dwi + line_dwords) && dwj < input_data.size(); dwj += 1)
+                //     {
+                //         cout << out_hex(input_data[dwj], 8, false) << " ";
+                //     }
+
+                //     cout << endl;
+                // }
+
+                // cout << endl;
             }
-
-            uint64_t input_address = iar->value;
-
-            assert(input_address != 0);
-
-            uint64_t control_address = get_address_register(slot_number, AddressType::control);
-
-            // start a DMA transaction
-            _shell->dma_read_from_host(input_address,  input_data.data(), read_cb);
-            wait(SC_ZERO_TIME);
-
-            // clear the doorbell register.
-            cout << "SlotsEngine: clearing slot << " << slot_number << " full db" << endl;
-            get_doorbell_register(slot_number, full) = 0;
-
-            // clear the full bit in the control register
-            cout << "SlotsEngine: clearing slot " << slot_number << " full control bit" << endl;
-            uint64_t zero;
-            _shell->dma_write_to_host(&zero,
-                                      get_control_full_status_address(control_address),
-                                      sizeof(zero));
-            wait(SC_ZERO_TIME);
-
-            // Dump the output buffer
-            const size_t line_dwords = 8;
-
-            for (size_t dwi = 0; dwi < input_data.size(); dwi += line_dwords)
+            else 
             {
-                if (dwi % line_dwords == 0)
-                {
-                    cout << out_hex(dwi * 4, 8) << ": ";
-                }
-
-                for (size_t dwj = dwi; dwj < (dwi + line_dwords) && dwj < input_data.size(); dwj += 1)
-                {
-                    cout << out_hex(input_data[dwj], 8, false) << " ";
-                }
-
-                cout << endl;
+                // clear the doorbell register.
+                cout << "SlotsEngine: clearing slot << " << slot_number << " full db" << endl;
+                get_doorbell_register(slot_number, full) = 0;
             }
-
-            cout << endl;
         }
         else
         {
