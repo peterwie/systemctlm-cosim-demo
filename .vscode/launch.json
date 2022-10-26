@@ -1,0 +1,21 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "cppdbg",
+            "request": "launch",
+            "name": "Run CoSim",
+            "cwd": "${workspaceFolder}",
+            "additionalSOLibSearchPath": "${workspaceFolder}/../systemc-2.3.3/lib-linux64",
+            "program": "${workspaceFolder}/bedrock_cdx",
+            "args": ["unix:/tmp/cosim/qemu-rport-_amba@0_cosim@0", "10000", "--printregs"],
+            "environment": [
+                {"name": "LD_LIBRARY_PATH", "value": "${workspaceFolder}/../systemc-2.3.3/lib-linux64"}
+            ]
+        }
+
+    ]
+}

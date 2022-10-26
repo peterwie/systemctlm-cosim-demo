@@ -34,6 +34,7 @@
 #include <functional>
 #include <iomanip>
 #include <map>
+#include <optional>
 #include <utility>
 
 #include "systemc.h"
@@ -52,6 +53,10 @@
 // A support structure for a map of registers of size R
 namespace Catapult
 {
+
+    // const class WriteableRegisterT { const uint32_t _dummy = 0; } WriteableRegister;
+    const class ReadOnlyRegisterT  { const uint32_t _dummy = 0; } ReadOnlyRegister;
+
     using namespace std;
 
     template<typename R>
@@ -70,8 +75,6 @@ namespace Catapult
         typedef typename map<uint64_t, Register>::iterator iterator;
         typedef typename map<uint64_t, Register>::value_type value_type;
 
-        const class WriteableRegisterT { const uint32_t _dummy = 0; } WriteableRegister;
-
         // a register pair provides both access methods and storage for a register.
         // by default a register is read-only with a stored value of (presumably integer) type R.
         // the read() function reads the stored value.
@@ -88,6 +91,7 @@ namespace Catapult
             Register(const Register& r) :
                 name(r.name),
                 is_readonly(r.is_readonly),
+                initial_value(r.initial_value),
                 value(r.value),
                 readfn(r.readfn),
                 writefn(r.writefn)
@@ -96,48 +100,50 @@ namespace Catapult
             }
 
             string name;
-            bool is_readonly = true;
+            const bool is_readonly = false;
+            const R initial_value = 0;
 
-            R initial_value = 0;
             R value = 0;
 
             ReadFnObj  readfn;
             WriteFnObj writefn;
 
             Register()                                        { }
-            Register(const char* n)                         : name(n) { }
-            Register(const char* n, R iv)                   : name(n) { initial_value = value = iv; }
-            Register(const char* n, WriteableRegisterT)     : name(n), is_readonly(false) { }
-            Register(const char* n, R iv, WriteableRegisterT):name(n), is_readonly(false) { initial_value = value = iv; }
+            Register(const char* n, R iv, const ReadFnObj& rfn, const WriteFnObj& wfn)
+                : name(n),
+                  is_readonly(false),
+                  initial_value(iv),
+                  value(iv),
+                  readfn(rfn),
+                  writefn(wfn)      { }
 
-            Register(const char* n, const ReadFnObj& rfn)   : name(n) { readfn = rfn; }
-            Register(const char* n, const WriteFnObj& wfn)  : name(n), is_readonly(false) { writefn = wfn; }
+            Register(const char* n, R iv, const ReadFnObj& rfn, const WriteFnObj& wfn, ReadOnlyRegisterT)
+                : name(n),
+                  is_readonly(true),
+                  initial_value(iv),
+                  value(iv),
+                  readfn(rfn),
+                  writefn(wfn)      { }
 
-            Register(const char* n, const ReadFnObj& rfn, const WriteFnObj& wfn) : name(n), is_readonly(false)
-            {
-                readfn = rfn;
-                writefn = wfn;
-            }
+            Register(const char* n, R iv)                   : Register(n, iv, nullptr, nullptr)                     { }
+            Register(const char* n, R iv, ReadOnlyRegisterT): Register(n, iv, nullptr, nullptr, ReadOnlyRegister)   { }
 
-            Register(const char* n, R iv, const ReadFnObj& rfn) : name(n), is_readonly(true) { initial_value = value = iv; readfn = rfn; }
-            Register(const char* n,
-                     R iv,
-                     const ReadFnObj& rfn,
-                     const WriteFnObj& wfn)
-                : name(n), is_readonly(false)
-            {
-                initial_value = value = iv;
-                readfn = rfn;
-                writefn = wfn;
-                return;
-            }
+            Register(const char* n)                         : Register(n, 0, nullptr, nullptr)                      { }
+            Register(const char* n,       ReadOnlyRegisterT): Register(n, 0, nullptr, nullptr, ReadOnlyRegister)    { }
+
+            Register(const char* n, const ReadFnObj& rfn)   : Register(n, 0, rfn,     nullptr)                      { }
+            Register(const char* n, const ReadFnObj& rfn, ReadOnlyRegisterT)
+                                                            : Register(n, 0, rfn,     nullptr, ReadOnlyRegister)    { }
+            Register(const char* n, const WriteFnObj& wfn)  : Register(n, 0, nullptr, wfn)                          { }
+
+            Register(const char* n, R iv, const ReadFnObj& rfn) : Register(n, iv, rfn, nullptr)                     { }
 
             Register(Register&& r)
+                : is_readonly(r.is_readonly),
+                  initial_value(r.initial_value),
+                  value(r.value)
             {
                 name = std::move(r.name);
-                is_readonly = r.is_readonly;
-                initial_value = std::move(r.initial_value);
-                value = std::move(r.value);
                 readfn = std::move(r.readfn);
                 writefn = std::move(r.writefn);
             }
@@ -211,14 +217,52 @@ namespace Catapult
 
         const string& name() const { return _name; }
 
+        Register* find_register(uint64_t address)
+        {
+            // locate the address in the register map.
+            const auto reg = _map.find(address);
+
+            if (reg == _map.end())
+            {
+                return nullptr;
+            }
+            else
+            {
+                return &(reg->second);
+            }
+        }
+
+        R& operator[](size_t address)
+        {
+            return _map.at(address).value;
+        }
+
+        bool try_get(size_t address, R& value)
+        {
+            auto f = find_register(address);
+
+            if (f != nullptr)
+            {
+                value = f->value;
+            }
+
+            return f != nullptr;
+        }
+
         Register& add(uint64_t address, const char* name, R value)
         {
             return add_register(address, Register(name, value));
         }
 
+        Register& add(uint64_t address, const char* name, R value, ReadOnlyRegisterT ro)
+        {
+            return add_register(address, Register(name, value, ro));
+        }
+
+
         Register& add(uint64_t address, const char* name, const ReadFnObj& rfn)
         {
-            return add_register(address, Register(name, rfn));
+            return add_register(address, Register(name, rfn, ReadOnlyRegister));
         }
 
         Register& add_register(uint64_t address, Register&& r)
@@ -263,21 +307,6 @@ namespace Catapult
 
             cout << endl;
             return result;
-        }
-
-        Register* find_register(uint64_t address)
-        {
-            // locate the address in the register map.
-            const auto reg = _map.find(address);
-
-            if (reg == _map.end())
-            {
-                return nullptr;
-            }
-            else
-            {
-                return &(reg->second);
-            }
         }
 
         bool write_register(uint64_t address, size_t read_size, R value)

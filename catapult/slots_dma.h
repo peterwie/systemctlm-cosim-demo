@@ -38,17 +38,6 @@
 #include <utility>
 
 #include "systemc.h"
-#include "tlm_utils/simple_initiator_socket.h"
-#include "tlm_utils/simple_target_socket.h"
-// #include "tlm_utils/tlm_quantumkeeper.h"
-//
-// #include "trace.h"
-// #include "iconnect.h"
-// #include "debugdev.h"
-// #include "soc/xilinx/versal-net/xilinx-versal-net.h"
-// #include "soc/dma/xilinx-cdma.h"
-// #include "tlm-extensions/genattr.h"
-// #include "memory.h"
 
 #include <vector>
 #include <string>
@@ -63,31 +52,38 @@ typedef uint64_t ULONGLONG;
 
 namespace Catapult
 {
-    struct SlotsInputs
-    {
-        virtual uint64_t get_input_register(uint8_t slot_number) = 0;
-        virtual uint64_t get_output_register(uint8_t slot_number) = 0;
-        virtual uint64_t get_control_register(uint8_t slot_number) = 0;
+    struct CatapultShellInterface;
 
-        virtual uint64_t send_done_notification(uint8_t slot_number) = 0;
-    };
+    static_assert(sizeof(DMA_ISO_CONTROL_RESULT_COMBINED) == 128, "DMA_ISO_CONTROL_RESULT_COMBINED size incorrect");
 
-    class SlotsEngine
+    class SlotsEngine : public sc_core::sc_module
     {
+        SC_HAS_PROCESS(SlotsEngine);
+
     public:
         static const uint64_t slots_magic_number    = SOFT_REG_MAPPING_SLOT_DMA_MAGIC_VALUE;
         static const unsigned int maximum_slot_count= 64;
 
+        static const size_t dma_block_size = (128 / 8);  // DMA is in 128b blocks, or 16B
+
         typedef RegisterMap<uint64_t>::Register RegisterT;
 
+        enum AddressType  { input = 0, output = 1, control = 2 };
         enum DoorbellType { full = 0, done = 1 };
 
     private:
+
         // The number of slots the engine is running
         unsigned int _slot_count = maximum_slot_count;
 
+        // back pointer to the catapult shell, through which the engine will initiate
+        // DMA operations
+        CatapultShellInterface* _shell = nullptr;
+
         // And a register map for DMA registers
         RegisterMap<uint64_t> _dma_regs;
+
+        sc_core::sc_event _dma_doorbell_write;
 
         void init_dma_registers(void);
 
@@ -96,18 +92,49 @@ namespace Catapult
                                      DoorbellType type,
                                      uint64_t new_value);
 
+        void dma_thread();
+
+        static constexpr uint64_t get_doorbell_regnum(int slot, DoorbellType type)
+        {
+            return 0x30000ull | (uint64_t(slot) << 9) | uint64_t(type);
+        }
+
+        static constexpr uint64_t get_address_regnum(int slot, AddressType type)
+        {
+            return 0x20200ull | (uint64_t(slot) << 2) | uint64_t(type);
+        }
+
+        static constexpr uint64_t get_control_full_status_address(uint64_t control_address)
+        {
+            return reinterpret_cast<uint64_t>(&(reinterpret_cast<DMA_ISO_CONTROL_RESULT_COMBINED*>(control_address))->control_buffer.full_status);
+        }
+
+        static constexpr uint64_t get_control_done_status_address(uint64_t control_address)
+        {
+            return reinterpret_cast<uint64_t>(&(reinterpret_cast<DMA_ISO_CONTROL_RESULT_COMBINED*>(control_address))->control_buffer.done_status);
+        }
+
+
+        template<typename A, typename B, typename C> static constexpr A add_wrap(A a, B b, C max)
+        {
+            return ((a + b) % max);
+        }
+
+        uint64_t& get_doorbell_register(unsigned int slot, DoorbellType type)
+        {
+            return _dma_regs[get_doorbell_regnum(slot, type)];
+        }
+
+        uint64_t& get_address_register(unsigned int slot, AddressType type)
+        {
+            return _dma_regs[get_address_regnum(slot, type)];
+        }
+
+        bool find_next_full_doorbell(unsigned int& hint, uint64_t& db_value);
+
     public:
 
-        SlotsEngine(unsigned int slot_count) : _slot_count(slot_count),
-                                               _dma_regs("dma")
-        {
-            if (slot_count > maximum_slot_count)
-            {
-                throw logic_error("slot_count is larger than maximum allowed value (64)");
-            }
-
-            init_dma_registers();
-        }
+        SlotsEngine(sc_module_name module_name, unsigned int slot_count, CatapultShellInterface* shell);
 
         void reset(void);
 

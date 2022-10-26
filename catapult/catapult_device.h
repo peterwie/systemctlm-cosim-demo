@@ -73,7 +73,13 @@ namespace Catapult
         bool dump_regs = false;
     };
 
-    class CatapultDevice : public sc_core::sc_module
+    struct CatapultShellInterface
+    {
+        virtual void dma_read_from_host(uint64_t source_address, void* destination_address, uint64_t transfer_cb) = 0;
+        virtual void dma_write_to_host(void* source_address, uint64_t destination_address, uint64_t transfer_cb) = 0;
+    };
+
+    class CatapultDevice : public sc_core::sc_module, CatapultShellInterface
     {
     public:
         // core addresses are the 16MB of memory defined in section 9 of the shell specifications
@@ -132,6 +138,9 @@ namespace Catapult
         CatapultDevice(sc_core::sc_module_name name, const CatapultDeviceOptions& options);
 
         void reset();
+
+        virtual void dma_read_from_host(uint64_t source_address, void* destination_address, uint64_t transfer_cb) override;
+        virtual void dma_write_to_host(void* source_address, uint64_t destination_address, uint64_t transfer_cb) override;
 
     private:
 

@@ -68,6 +68,7 @@ namespace Catapult
         const bool          _show_base;
 
         out_hex(uint64_t value, size_t width = 16, bool show_base = true) : _value(value), _width(width), _show_base(show_base) { }
+        out_hex(void* value,    size_t width = 16, bool show_base = true) : out_hex(reinterpret_cast<uint64_t>(value), width, show_base) { }
     };
 
     inline std::ostream& operator<<(std::ostream& o, const out_write64b& wb)

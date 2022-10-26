@@ -38,6 +38,10 @@
         "utility": "cpp",
         "atomic": "cpp",
         "bit": "cpp",
-        "sstream": "cpp"
+        "sstream": "cpp",
+        "initializer_list": "cpp",
+        "exception": "cpp",
+        "iosfwd": "cpp",
+        "new": "cpp"
     }
 }
