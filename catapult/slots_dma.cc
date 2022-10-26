@@ -1,27 +1,3 @@
-/*
- * Top level of the Versal Net CDx stub cosim example.
- *
- * Copyright (c) 2022 Xilinx Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 #include "catapult_device.h"
 
 #include <algorithm>
@@ -396,23 +372,18 @@ void SlotsEngine::dma_thread()
             {
                 if (dwi % line_dwords == 0)
                 {
-                    cout << out_hex(dwi, 8) << ": ";
+                    cout << out_hex(dwi * 4, 8) << ": ";
                 }
 
-                for (size_t dwj = 0; dwj < line_dwords; dwj += 1)
+                for (size_t dwj = dwi; dwj < (dwi + line_dwords) && dwj < input_data.size(); dwj += 1)
                 {
-                    size_t dwk = (dwi * line_dwords) + dwj;
-
-                    if (dwk >= input_data.size())
-                    {
-                        break;
-                    }
-
-                    cout << out_hex(input_data[dwk], 8, false) << " ";
+                    cout << out_hex(input_data[dwj], 8, false) << " ";
                 }
 
                 cout << endl;
             }
+
+            cout << endl;
         }
         else
         {

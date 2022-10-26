@@ -50,12 +50,22 @@ CatapultDevice::CatapultDevice(sc_core::sc_module_name name, const CatapultDevic
     target_socket("target-socket"),
     initiator_socket("initiator-socket"),
     options(opts),
-    _shell_regs("core"),
-    _slots_engine("SlotsEngine", 64, this)
+    _shell_regs("core")
 {
-
-    _softreg_width_adapter.set_read([this](uint64_t a, uint64_t& v) { return this->read_soft_register(a, v); });
-    _softreg_width_adapter.set_write([this](uint64_t a, uint64_t v) { return this->write_soft_register(a, v); });
+    _softreg_width_adapter.set_read(
+        [this](uint64_t a, uint64_t& v) 
+        { 
+            return (_role ? _role->read_soft_register(a, v) :
+                            true);
+        }
+        );
+    _softreg_width_adapter.set_write(
+        [this](uint64_t a, uint64_t v) 
+        { 
+            return (_role ? _role->write_soft_register(a, v) : 
+                            true);
+        }
+        );
 
     target_socket.register_b_transport(this, &CatapultDevice::b_transport);
 
@@ -65,7 +75,7 @@ CatapultDevice::CatapultDevice(sc_core::sc_module_name name, const CatapultDevic
 void CatapultDevice::reset()
 {
     _shell_regs.reset();
-    _slots_engine.reset();
+    if (_role) { _role->reset(); }
 }
 
 template<class T, typename V>
@@ -197,58 +207,6 @@ size_t CatapultDevice::write_unimplemented_register(uint64_t address, size_t, ui
     return 0;
 }
 
-bool CatapultDevice::read_soft_register(uint64_t address, uint64_t& value)
-{
-    auto reg_type = get_address_type(address);
-
-    uint32_t reg_index = static_cast<uint32_t>((address & soft_reg_addr_num_mask) >> soft_reg_addr_num_shift);
-
-    if (reg_type == soft || options.enable_slots_dma == false)
-    {
-        value = ((uint64_t) reg_index << 32) |  reg_index;
-        cout << "CatapultDevice: r " << std::hex << address << " softshell register 0x" << hex << reg_index << endl;
-        return sizeof(uint64_t);
-    }
-    else // regtype is DMA
-    {
-        string message;
-        cout << "CatapultDevice: r " << out_hex(address, 6, false)
-             << " dma register " << out_hex(reg_index, 6, false)
-             << " => ";
-        value =  _slots_engine.read_dma_register(reg_index, message);
-        cout << out_hex(value, 16, true)
-             << " [" << message << "]" << endl;
-
-        return true;
-    }
-}
-
-bool CatapultDevice::write_soft_register(uint64_t address, uint64_t value)
-{
-    auto reg_type = get_address_type(address);
-    uint32_t reg_index = static_cast<uint32_t>((address & soft_reg_addr_num_mask) >> soft_reg_addr_num_shift);
-
-    if (reg_type == soft || options.enable_slots_dma == false)
-    {
-        cout << "CatapultDevice: write of unimplemented "
-            << (reg_type == soft ? "soft" : "dma")
-            << " register " << out_hex(address, 6) << endl;
-    }
-    else // regtype is DMA
-    {
-        cout << "CatapultDevice: w " << out_hex(address, 6, false)
-             << " dma register " << out_hex(reg_index, 6, false)
-             << " <= " << out_hex(value, 16, true);
-
-        string message;
-        _slots_engine.write_dma_register(reg_index, value, message);
-
-        cout << " [" << message << "]" << endl;
-    }
-
-    return true;
-}
-
 size_t CatapultDevice::read_shell_register(uint64_t address, size_t length, uint64_t& value)
 {
     uint32_t value32;
@@ -294,7 +252,7 @@ void CatapultDevice::init_registers()
         _shell_regs.print_register_table();
         cout << endl;
 
-        _slots_engine.print();
+        if (_role) { _role->print(); }
     }
 }
 
@@ -591,7 +549,7 @@ uint64_t CatapultDevice::get_cycle_counter()
     return v;
 }
 
-CatapultDevice::CatapultRegisterType CatapultDevice::get_address_type(uint64_t address)
+CatapultRegisterType CatapultDevice::get_address_type(uint64_t address)
 {
     //auto original_address = address;
 

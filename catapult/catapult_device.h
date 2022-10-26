@@ -1,27 +1,3 @@
-/*
- * Top level of the Versal Net CDx stub cosim example.
- *
- * Copyright (c) 2022 Xilinx Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 #pragma once
 
 #define SC_INCLUDE_DYNAMIC_PROCESSES
@@ -79,6 +55,24 @@ namespace Catapult
         virtual void dma_write_to_host(void* source_address, uint64_t destination_address, uint64_t transfer_cb) = 0;
     };
 
+    struct CatapultRoleInterface
+    {
+        virtual void reset()  { return; }
+        virtual void print()  { return; }
+        virtual bool    read_soft_register(uint64_t address, uint64_t& value) = 0;
+        virtual bool   write_soft_register(uint64_t address, uint64_t  value) = 0;
+    };
+
+    enum CatapultRegisterType : uint16_t
+    {
+        invalid  = 0,
+        external = 0x1008,
+        shell    = 0x0004,
+        soft     = 0x0808,
+        dma      = 0x0908
+    };
+
+
     class CatapultDevice : public sc_core::sc_module, CatapultShellInterface
     {
     public:
@@ -112,16 +106,7 @@ namespace Catapult
         // The bottom 8b are the register size in bytes (4 or 8)
         //
         //
-        enum CatapultRegisterType : uint16_t
-        {
-            invalid  = 0,
-            external = 0x1008,
-            shell    = 0x0004,
-            soft     = 0x0808,
-            dma      = 0x0908
-        };
-
-        CatapultRegisterType get_address_type(uint64_t address);
+        static CatapultRegisterType get_address_type(uint64_t address);
 
         size_t get_register_size(CatapultRegisterType type)
         {
@@ -160,7 +145,7 @@ namespace Catapult
             std::function<bool (uint64_t, uint64_t)>
             > _softreg_width_adapter;
 
-        SlotsEngine _slots_engine;
+        CatapultRoleInterface* _role = nullptr;
 
         void init_registers(void);
 
@@ -173,13 +158,6 @@ namespace Catapult
         // the result, otherwise it should be untouched.
         size_t  read_shell_register(uint64_t address, size_t size, uint64_t& value);
         size_t write_shell_register(uint64_t address, size_t size, uint64_t value);
-
-        // reads a 64b soft register in the soft register range.  Unimplemented softregs return -1
-        // this includes any potential DMA registers.  Note this goes through a
-        // width adapter, which takes care of converting partial 64b r/w into complete
-        // ones.
-        bool    read_soft_register(uint64_t address, uint64_t& value);
-        bool   write_soft_register(uint64_t address, uint64_t  value);
 
         // reads a register outside of the core registers.
         // returns true if the register is implemented, and stores the value to return in value
@@ -200,15 +178,15 @@ namespace Catapult
         bool test_addr(const char* name, uint64_t address, uint64_t mask, uint64_t expected, uint64_t& value);
     };
 
-    inline std::ostream& operator<<(CatapultDevice::CatapultRegisterType t, std::ostream& o)
+    inline std::ostream& operator<<(CatapultRegisterType t, std::ostream& o)
     {
         switch (t)
         {
-            case CatapultDevice::CatapultRegisterType::invalid:   { o << "invalid"; break; }
-            case CatapultDevice::CatapultRegisterType::external:  { o << "external"; break; }
-            case CatapultDevice::CatapultRegisterType::shell:     { o << "shell"; break; }
-            case CatapultDevice::CatapultRegisterType::soft:      { o << "soft"; break; }
-            case CatapultDevice::CatapultRegisterType::dma:       { o << "dma"; break; }
+            case CatapultRegisterType::invalid:   { o << "invalid"; break; }
+            case CatapultRegisterType::external:  { o << "external"; break; }
+            case CatapultRegisterType::shell:     { o << "shell"; break; }
+            case CatapultRegisterType::soft:      { o << "soft"; break; }
+            case CatapultRegisterType::dma:       { o << "dma"; break; }
             default:        { o << "unknown(" << (int) t << ")"; break; }
         }
         return o;
